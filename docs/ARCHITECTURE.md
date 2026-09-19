@@ -178,6 +178,9 @@ ocultar valores** (para olhar para o telemóvel em público).
 - [x] Normalizador com diagnósticos e cálculo de liquidação (`src/bybit/normalize.ts`)
 - [x] `DataSource`: fixtures + Bybit (`src/data/`)
 - [x] Relatório de terminal de ponta a ponta (`npm run report`)
+- [x] Protótipo de UX navegável (`prototype/wealthtry.html`), alimentado pelo
+      motor real via `npm run emit-ui-data` — a página não reimplementa
+      matemática de risco, recebe os 121 cenários já calculados e indexa-os
 - [x] Script de sondagem autónomo (`scripts/probe-bybit.mjs`)
 - [ ] Supabase: auth, schema, cifra das chaves
 - [ ] Next.js: Estado, Cenários, Histórico

@@ -10,6 +10,7 @@
     "test": "node --experimental-strip-types --test src/*/*.test.ts",
     "probe": "node scripts/probe-bybit.mjs",
     "probe:safe": "node scripts/probe-bybit.mjs --redact --out probe-output.json",
-    "report": "node --experimental-strip-types scripts/report.ts"
+    "report": "node --experimental-strip-types scripts/report.ts",
+    "emit-ui-data": "node --experimental-strip-types scripts/emit-ui-data.ts"
   }
 }

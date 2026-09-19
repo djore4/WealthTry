@@ -118,8 +118,8 @@ export function normalizePosition(
   if (raw.tradeMode === 0) {
     warn(
       'margem_cruzada',
-      'Posicao em margem CRUZADA: a liquidacao e ao nivel da conta, nao da ' +
-        'posicao. Os cenarios por posicao sao aproximacoes.',
+      'Posição em margem CRUZADA: a liquidação é ao nível da conta, não da ' +
+        'posição. Os cenários por posição são aproximações.',
     );
   }
 
@@ -143,7 +143,7 @@ export function normalizePosition(
   if (positionMM > 0 && positionValue > 0) {
     mmRate = positionMM / positionValue;
   } else {
-    warn('mm_assumida', `positionMM ausente; assumida taxa de manutencao ${DEFAULT_MM_RATE}.`);
+    warn('mm_assumida', `positionMM ausente; assumida taxa de manutenção ${DEFAULT_MM_RATE}.`);
   }
 
   let liqPrice: number | null = num(raw.liqPrice);
@@ -152,14 +152,14 @@ export function normalizePosition(
     if (liqPrice === null) {
       warn(
         'sem_liquidacao',
-        'A Bybit nao devolveu liqPrice e o calculo indica que esta posicao nao ' +
-          'pode ser liquidada nesta direcao.',
+        'A Bybit não devolveu liqPrice e o cálculo indica que esta posição não ' +
+          'pode ser liquidada nesta direção.',
       );
     } else {
       warn(
         'liq_derivada',
         `liqPrice ausente na resposta; calculado ${liqPrice.toFixed(2)} ` +
-          `com taxa de manutencao ${(mmRate * 100).toFixed(3)}%.`,
+          `com taxa de manutenção ${(mmRate * 100).toFixed(3)}%.`,
       );
     }
   }
@@ -223,7 +223,7 @@ export function applyFunding(
         symbol: p.symbol,
         code: 'sem_funding',
         message:
-          'Nenhum registo SETTLEMENT encontrado para este simbolo. O funding ' +
+          'Nenhum registo SETTLEMENT encontrado para este símbolo. O funding ' +
           'acumulado aparece como zero, o que pode ser falso.',
       });
       return p;

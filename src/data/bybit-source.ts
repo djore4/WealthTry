@@ -50,7 +50,7 @@ export class BybitSource implements DataSource {
           severity: 'warning',
           symbol: `${category}/${settleCoin}`,
           code: 'sondagem_falhou',
-          message: `Nao foi possivel ler posicoes: ${(err as Error).message}`,
+          message: `Não foi possível ler posições: ${(err as Error).message}`,
         });
         continue;
       }
@@ -93,7 +93,7 @@ export class BybitSource implements DataSource {
           severity: 'warning',
           symbol: category,
           code: 'funding_falhou',
-          message: `Registo de funding indisponivel: ${(err as Error).message}`,
+          message: `Registo de funding indisponível: ${(err as Error).message}`,
         });
       }
     }

@@ -1,0 +1,570 @@
+<title>Fronteira de Liquidação</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Paleta CLARA completa. Os blocos escuros mais abaixo só redefinem tokens. */
+  :root {
+    color-scheme: light;
+    --plane:       #f1f3f6;
+    --surface:     #ffffff;
+    --surface-2:   #f7f8fa;
+    --border:      #dde1e8;
+    --border-firm: #c6ccd7;
+    --ink:         #171a20;
+    --ink-2:       #3d4450;
+    --muted:       #5c6472;
+    --series:      #2a78d6;
+    --series-soft: rgba(42, 120, 214, 0.13);
+    --grid:        #e7eaf0;
+
+    --good-ink:   #0a6b0a;  --good-wash:   #e6f4e6;  --good-mark:   #0ca30c;
+    --warn-ink:   #7a5100;  --warn-wash:   #fcf1d8;  --warn-mark:   #fab219;
+    --crit-ink:   #a32626;  --crit-wash:   #fae8e8;  --crit-mark:   #d03b3b;
+
+    --shadow: 0 1px 2px rgba(23, 26, 32, 0.06), 0 1px 1px rgba(23, 26, 32, 0.04);
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --r: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --plane: #0c0e12; --surface: #171a20; --surface-2: #1d222b;
+      --border: #262b35; --border-firm: #353c49;
+      --ink: #e8eaf0; --ink-2: #c2c8d4; --muted: #949cad;
+      --series: #3987e5; --series-soft: rgba(57, 135, 229, 0.18); --grid: #232833;
+      --good-ink: #5cd65c; --good-wash: #16251a; --good-mark: #0ca30c;
+      --warn-ink: #f5c451; --warn-wash: #2a2313; --warn-mark: #fab219;
+      --crit-ink: #f08080; --crit-wash: #2a1818; --crit-mark: #d03b3b;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0c0e12; --surface: #171a20; --surface-2: #1d222b;
+    --border: #262b35; --border-firm: #353c49;
+    --ink: #e8eaf0; --ink-2: #c2c8d4; --muted: #949cad;
+    --series: #3987e5; --series-soft: rgba(57, 135, 229, 0.18); --grid: #232833;
+    --good-ink: #5cd65c; --good-wash: #16251a; --good-mark: #0ca30c;
+    --warn-ink: #f5c451; --warn-wash: #2a2313; --warn-mark: #fab219;
+    --crit-ink: #f08080; --crit-wash: #2a1818; --crit-mark: #d03b3b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  * { box-sizing: border-box; }
+  html { overflow-x: hidden; }
+  .pos-head { min-width: 0; }
+  .verdict-lead { overflow-wrap: anywhere; }
+  body {
+    background: var(--plane);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    margin: 0;
+    -webkit-text-size-adjust: 100%;
+  }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* --- cabeçalho fixo --- */
+  header {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 20;
+    background: color-mix(in srgb, var(--plane) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .bar { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 10px;
+         display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wordmark { font-weight: 700; letter-spacing: -0.01em; font-size: 15px; margin-right: auto; }
+  .wordmark span { color: var(--muted); font-weight: 500; }
+
+  .seg { display: flex; background: var(--surface-2); border: 1px solid var(--border);
+         border-radius: 8px; padding: 2px; gap: 2px; }
+  .seg button { font: 500 13px var(--sans); color: var(--muted); background: none;
+                border: 0; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-selected="true"] { background: var(--surface); color: var(--ink);
+                box-shadow: var(--shadow); }
+  .seg button:focus-visible, .icon:focus-visible, .chip:focus-visible,
+  input[type="range"]:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
+
+  .tools { display: flex; gap: 6px; }
+  .icon { font: 600 12px var(--mono); color: var(--muted); background: var(--surface-2);
+          border: 1px solid var(--border); border-radius: 8px; width: 34px; height: 30px;
+          cursor: pointer; display: grid; place-items: center; }
+  .icon[aria-pressed="true"] { color: var(--series); border-color: var(--series); }
+
+  main { max-width: 760px; margin: 0 auto; padding-inline: 16px;
+         padding-block: 18px 32px; }
+  h2 { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+       color: var(--muted); margin: 26px 0 10px; }
+  h2:first-child { margin-top: 4px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--r); }
+
+  /* --- veredicto: o número herói --- */
+  .verdict { padding: 18px; display: grid; gap: 14px; }
+  .verdict-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .big { font: 600 40px/1 var(--mono); letter-spacing: -0.02em; }
+  .verdict-lead { font-size: 14px; color: var(--ink-2); }
+  .verdict-lead b { color: var(--ink); font-weight: 600; }
+  .split { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 460px) { .split { grid-template-columns: 1fr; } }
+  .half { border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+          background: var(--surface-2); min-width: 0; overflow-wrap: anywhere; }
+  .half .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+               color: var(--muted); font-weight: 600; }
+
+  /* --- mosaicos --- */
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } }
+  .tile { background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--r); padding: 13px 14px; min-width: 0; overflow-wrap: anywhere; }
+  .tile .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+               color: var(--muted); font-weight: 600; }
+  .tile .val { font: 600 22px/1.25 var(--mono); margin-top: 4px; }
+  .tile .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* --- posições --- */
+  .pos { padding: 14px; border-bottom: 1px solid var(--border); }
+  .pos:last-child { border-bottom: 0; }
+  .pos-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sym { font: 600 15px var(--mono); }
+  .tag { font: 500 11px var(--sans); color: var(--muted); border: 1px solid var(--border-firm);
+         border-radius: 999px; padding: 1px 7px; }
+  .pos-pnl { margin-left: auto; font: 600 15px var(--mono); }
+  .chip { font: 600 11px var(--sans); border-radius: 999px; padding: 2px 8px;
+          display: inline-flex; align-items: center; gap: 4px; border: 0; }
+  .chip.good { color: var(--good-ink); background: var(--good-wash); }
+  .chip.warn { color: var(--warn-ink); background: var(--warn-wash); }
+  .chip.crit { color: var(--crit-ink); background: var(--crit-wash); }
+  .chip i { font-style: normal; }
+
+  /* pista de liquidação */
+  .runway { margin-top: 12px; }
+  .track { position: relative; height: 26px; border-radius: 6px;
+           background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+  .danger { position: absolute; top: 0; bottom: 0; }
+  .danger.good { background: var(--good-wash); }
+  .danger.warn { background: var(--warn-wash); }
+  .danger.crit { background: var(--crit-wash); }
+  .edge { position: absolute; top: 0; bottom: 0; width: 2px; }
+  .edge.good { background: var(--good-mark); }
+  .edge.warn { background: var(--warn-mark); }
+  .edge.crit { background: var(--crit-mark); }
+  .entry { position: absolute; top: 4px; bottom: 4px; width: 2px;
+           background: var(--border-firm); }
+  .here { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%;
+          transform: translate(-50%, -50%); border: 2px solid var(--surface); }
+  .here.good { background: var(--good-mark); }
+  .here.warn { background: var(--warn-mark); }
+  .here.crit { background: var(--crit-mark); }
+  .mid { position: absolute; left: calc(50% - 0.5px); top: 0; bottom: 0; width: 1px;
+         background: var(--border-firm); }
+  .scale { display: flex; justify-content: space-between; margin-top: 3px;
+           font: 500 10px var(--mono); color: var(--muted); }
+  .runway-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px;
+                   font-size: 11.5px; color: var(--muted); }
+  .runway-legend b { color: var(--ink-2); font-weight: 600; font-family: var(--mono); }
+
+  /* --- gráfico --- */
+  .chartwrap { padding: 14px 8px 8px; }
+  svg { display: block; width: 100%; height: auto; }
+  .axis-txt { font: 500 10.5px var(--mono); fill: var(--muted); }
+  .axis-txt.strong { fill: var(--ink-2); font-weight: 600; }
+  .liq-lbl { font: 600 9.5px var(--mono); fill: var(--crit-ink); }
+
+  /* --- slider fixo --- */
+  .dock { position: sticky; bottom: 0; z-index: 15; margin-top: 16px;
+          background: color-mix(in srgb, var(--surface) 94%, transparent);
+          backdrop-filter: blur(12px);
+          border: 1px solid var(--border); border-radius: var(--r);
+          padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .dock-top { display: flex; align-items: baseline; gap: 10px; }
+  .dock-top .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+                   color: var(--muted); font-weight: 600; }
+  .dock-move { font: 600 26px/1 var(--mono); margin-left: auto; }
+  input[type="range"] { width: 100%; margin: 12px 0 10px; accent-color: var(--series);
+                        height: 26px; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .presets button { font: 500 12px var(--mono); color: var(--ink-2);
+                    background: var(--surface-2); border: 1px solid var(--border);
+                    border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+  .presets button:hover { border-color: var(--border-firm); }
+
+  /* --- tabelas --- */
+  .scroller { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { font: 600 10.5px var(--sans); text-transform: uppercase; letter-spacing: 0.06em;
+       color: var(--muted); text-align: right; padding: 10px 8px; white-space: nowrap;
+       border-bottom: 1px solid var(--border); }
+  th:first-child { text-align: left; }
+  td { padding: 9px 8px; border-bottom: 1px solid var(--border); text-align: right;
+       white-space: nowrap; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  td:first-child { text-align: left; font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .note b { color: var(--ink-2); font-weight: 600; }
+  .diag { padding: 12px 14px; font-size: 12.5px; color: var(--ink-2);
+          display: grid; gap: 7px; }
+  .diag code { font: 500 11px var(--mono); color: var(--muted); }
+  .up { color: var(--good-ink); }
+  .down { color: var(--crit-ink); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header>
+  <div class="bar">
+    <div class="wordmark">WealthTry <span>· risco</span></div>
+    <div class="seg" role="tablist" aria-label="Vistas">
+      <button role="tab" id="tab-estado" aria-selected="true" aria-controls="pane-estado">Estado</button>
+      <button role="tab" id="tab-cenarios" aria-selected="false" aria-controls="pane-cenarios">Cenários</button>
+    </div>
+    <div class="tools">
+      <button class="icon" id="t-cur" aria-pressed="false" title="Alternar USD / EUR">USD</button>
+      <button class="icon" id="t-hide" aria-pressed="false" title="Ocultar valores">•••</button>
+      <button class="icon" id="t-theme" aria-pressed="false" title="Alternar tema claro / escuro">◐</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="pane-estado" role="tabpanel" aria-labelledby="tab-estado">
+    <h2>Se o mercado se mover contra ti</h2>
+    <div class="card verdict">
+      <div class="verdict-row">
+        <div class="big down" id="v-move">—</div>
+        <div class="verdict-lead" id="v-lead"></div>
+      </div>
+      <div class="split">
+        <div class="half">
+          <div class="lbl">Primeira liquidação numa queda</div>
+          <div class="num" id="v-down" style="font-size:16px;font-weight:600;margin-top:3px"></div>
+        </div>
+        <div class="half">
+          <div class="lbl">Primeira liquidação numa subida</div>
+          <div class="num" id="v-up" style="font-size:16px;font-weight:600;margin-top:3px"></div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Agora</h2>
+    <div class="tiles">
+      <div class="tile"><div class="lbl">Capital em risco</div>
+        <div class="val" id="s-cap">—</div><div class="sub">margem das 4 posições</div></div>
+      <div class="tile"><div class="lbl">PnL não realizado</div>
+        <div class="val" id="s-pnl">—</div><div class="sub" id="s-pnl-pct"></div></div>
+      <div class="tile"><div class="lbl">Equity</div>
+        <div class="val" id="s-eq">—</div><div class="sub">capital + PnL</div></div>
+    </div>
+
+    <h2>Posições abertas</h2>
+    <div class="card" id="positions"></div>
+    <p class="note">A <b>alavancagem efetiva</b> é <code>1 / |movimento até à liquidação|</code>,
+      medida a partir do preço de hoje. Uma <i>inverse</i> tem a margem na própria moeda, por
+      isso o colateral desvaloriza ao mesmo tempo que a posição perde — e liquida mais cedo do
+      que a alavancagem nominal sugere.</p>
+
+    <h2>Funding</h2>
+    <div class="card scroller">
+      <table>
+        <thead><tr><th>Símbolo</th><th>Taxa / 8h</th><th>Desde a abertura</th><th>Próximos 30 dias</th></tr></thead>
+        <tbody id="funding"></tbody>
+      </table>
+    </div>
+    <p class="note">A projeção assume a taxa atual constante. É <b>aritmética, não previsão</b>.</p>
+
+    <h2>Diagnóstico da camada de dados</h2>
+    <div class="card diag" id="diag"></div>
+  </section>
+
+  <section id="pane-cenarios" role="tabpanel" aria-labelledby="tab-cenarios" hidden>
+    <h2>Capital restante por movimento de mercado</h2>
+    <div class="card chartwrap">
+      <svg id="chart" viewBox="0 0 720 300" role="img"
+           aria-label="Capital restante em função do movimento do mercado, com as liquidações marcadas"></svg>
+    </div>
+    <p class="note">Todos os ativos movem-se na <b>mesma percentagem</b>. Cripto é altamente
+      correlacionada, por isso é o caso de stress honesto — mas é um <b>pressuposto</b>, e está
+      aqui escrito em vez de escondido.</p>
+
+    <h2 id="legs-h">No cenário selecionado</h2>
+    <div class="card scroller">
+      <table>
+        <thead><tr><th>Símbolo</th><th>Preço</th><th>PnL</th><th>Equity</th><th>Estado</th></tr></thead>
+        <tbody id="legs"></tbody>
+      </table>
+    </div>
+
+    <div class="dock">
+      <div class="dock-top">
+        <div class="lbl">Movimento do mercado</div>
+        <div class="dock-move" id="d-move">0%</div>
+      </div>
+      <input type="range" id="slider" min="-60" max="60" step="1" value="0"
+             aria-label="Movimento do mercado em percentagem">
+      <div class="presets" id="presets"></div>
+      <div class="note" id="d-sum" style="margin-top:10px"></div>
+    </div>
+  </section>
+</main>
+
+<script type="application/json" id="payload">{"generatedAt":"2026-09-19T19:30:12.639Z","source":"fixture","baseCapitalUsd":16985.795115499997,"eurPerUsd":0.92,"positions":[{"symbol":"BTCUSDT","category":"linear","side":"long","leverage":2,"effectiveLeverage":2.0785649409627616,"entryPrice":95000,"markPrice":92000,"liqPrice":47738.693467336685,"liqMove":-0.48110115796373165,"marginAsset":"USDT","marginUsd":7125,"pnlUsd":-450,"equityUsd":6675,"fundingPaidUsd":-18.4,"fundingRate":0.0001,"funding30dUsd":-124.20000000000002},{"symbol":"ETHUSDT","category":"linear","side":"short","leverage":3,"effectiveLeverage":3.7411797388647083,"entryPrice":3200,"markPrice":3350,"liqPrice":4245.439469320067,"liqMove":0.2672953639761393,"marginAsset":"USDT","marginUsd":3200,"pnlUsd":-450,"equityUsd":2750,"fundingPaidUsd":6.15,"fundingRate":-0.00005,"funding30dUsd":-45.22500000000001},{"symbol":"BTCUSD","category":"inverse","side":"long","leverage":2,"effectiveLeverage":3.1702273049351013,"entryPrice":94000,"markPrice":92000,"liqPrice":62979.99886103329,"liqMove":-0.3154347949887686,"marginAsset":"BTC","marginUsd":3914.8934799999997,"pnlUsd":-170.21276595744695,"equityUsd":3744.6807140425526,"fundingPaidUsd":-38.64,"fundingRate":0.00012,"funding30dUsd":-86.4},{"symbol":"ETHUSD","category":"inverse","side":"long","leverage":2,"effectiveLeverage":2.5641025751983353,"entryPrice":3050,"markPrice":3350,"liqPrice":2043.5000056536835,"liqMove":-0.38999999831233323,"marginAsset":"ETH","marginUsd":2745.9016355000003,"pnlUsd":491.80327868852453,"equityUsd":3237.704914188525,"fundingPaidUsd":-64.655,"fundingRate":0.00008,"funding30dUsd":-36}],"frontier":{"down":{"move":-0.3154347949887686,"symbol":"BTCUSD"},"up":{"move":0.2672953639761393,"symbol":"ETHUSDT"}},"scenarios":[{"move":-0.6,"pnlUsd":-8205.795115499997,"equityUsd":8780,"capitalLossPct":0.4830974976268251,"legs":[{"symbol":"BTCUSDT","price":36800,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1340,"pnlUsd":5580,"equityUsd":8780,"liquidated":false},{"symbol":"BTCUSD","price":36800,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1340,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.59,"pnlUsd":-8306.295115499997,"equityUsd":8679.5,"capitalLossPct":0.48901420622460456,"legs":[{"symbol":"BTCUSDT","price":37720,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1373.5,"pnlUsd":5479.5,"equityUsd":8679.5,"liquidated":false},{"symbol":"BTCUSD","price":37720,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1373.5,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.58,"pnlUsd":-8406.795115499997,"equityUsd":8579,"capitalLossPct":0.49493091482238416,"legs":[{"symbol":"BTCUSDT","price":38640.00000000001,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1407.0000000000002,"pnlUsd":5378.999999999999,"equityUsd":8579,"liquidated":false},{"symbol":"BTCUSD","price":38640.00000000001,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1407.0000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.57,"pnlUsd":-8507.295115499997,"equityUsd":8478.5,"capitalLossPct":0.5008476234201636,"legs":[{"symbol":"BTCUSDT","price":39560.00000000001,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1440.5000000000002,"pnlUsd":5278.499999999999,"equityUsd":8478.5,"liquidated":false},{"symbol":"BTCUSD","price":39560.00000000001,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1440.5000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.56,"pnlUsd":-8607.795115499997,"equityUsd":8378,"capitalLossPct":0.5067643320179431,"legs":[{"symbol":"BTCUSDT","price":40479.99999999999,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1473.9999999999998,"pnlUsd":5178.000000000001,"equityUsd":8378,"liquidated":false},{"symbol":"BTCUSD","price":40479.99999999999,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1473.9999999999998,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.55,"pnlUsd":-8708.295115499997,"equityUsd":8277.5,"capitalLossPct":0.5126810406157226,"legs":[{"symbol":"BTCUSDT","price":41399.99999999999,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1507.4999999999998,"pnlUsd":5077.500000000001,"equityUsd":8277.5,"liquidated":false},{"symbol":"BTCUSD","price":41399.99999999999,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1507.4999999999998,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.54,"pnlUsd":-8808.795115499997,"equityUsd":8177.000000000001,"capitalLossPct":0.5185977492135021,"legs":[{"symbol":"BTCUSDT","price":42320,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1540.9999999999998,"pnlUsd":4977.000000000001,"equityUsd":8177.000000000001,"liquidated":false},{"symbol":"BTCUSD","price":42320,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1540.9999999999998,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.53,"pnlUsd":-8909.295115499997,"equityUsd":8076.5,"capitalLossPct":0.5245144578112817,"legs":[{"symbol":"BTCUSDT","price":43240,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1574.5,"pnlUsd":4876.5,"equityUsd":8076.5,"liquidated":false},{"symbol":"BTCUSD","price":43240,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1574.5,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.52,"pnlUsd":-9009.795115499997,"equityUsd":7976,"capitalLossPct":0.5304311664090612,"legs":[{"symbol":"BTCUSDT","price":44160,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1608,"pnlUsd":4776,"equityUsd":7976,"liquidated":false},{"symbol":"BTCUSD","price":44160,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1608,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.51,"pnlUsd":-9110.295115499997,"equityUsd":7875.5,"capitalLossPct":0.5363478750068407,"legs":[{"symbol":"BTCUSDT","price":45080,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1641.5,"pnlUsd":4675.5,"equityUsd":7875.5,"liquidated":false},{"symbol":"BTCUSD","price":45080,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1641.5,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.5,"pnlUsd":-9210.795115499997,"equityUsd":7775,"capitalLossPct":0.5422645836046202,"legs":[{"symbol":"BTCUSDT","price":46000,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1675,"pnlUsd":4575,"equityUsd":7775,"liquidated":false},{"symbol":"BTCUSD","price":46000,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1675,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.49,"pnlUsd":-9311.295115499997,"equityUsd":7674.5,"capitalLossPct":0.5481812922023996,"legs":[{"symbol":"BTCUSDT","price":46920,"pnlUsd":-7125,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSDT","price":1708.5,"pnlUsd":4474.5,"equityUsd":7674.5,"liquidated":false},{"symbol":"BTCUSD","price":46920,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1708.5,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.48,"pnlUsd":-9360.795115499997,"equityUsd":7625,"capitalLossPct":0.551095491959515,"legs":[{"symbol":"BTCUSDT","price":47840,"pnlUsd":-7074,"equityUsd":51,"liquidated":false},{"symbol":"ETHUSDT","price":1742,"pnlUsd":4374,"equityUsd":7574,"liquidated":false},{"symbol":"BTCUSD","price":47840,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1742,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.47,"pnlUsd":-9323.295115499997,"equityUsd":7662.5,"capitalLossPct":0.5488877648707913,"legs":[{"symbol":"BTCUSDT","price":48760,"pnlUsd":-6936,"equityUsd":189,"liquidated":false},{"symbol":"ETHUSDT","price":1775.5,"pnlUsd":4273.5,"equityUsd":7473.5,"liquidated":false},{"symbol":"BTCUSD","price":48760,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1775.5,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.46,"pnlUsd":-9285.795115499997,"equityUsd":7699.999999999999,"capitalLossPct":0.5466800377820676,"legs":[{"symbol":"BTCUSDT","price":49680,"pnlUsd":-6798,"equityUsd":327,"liquidated":false},{"symbol":"ETHUSDT","price":1809.0000000000002,"pnlUsd":4172.999999999999,"equityUsd":7372.999999999999,"liquidated":false},{"symbol":"BTCUSD","price":49680,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1809.0000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.45,"pnlUsd":-9248.295115499997,"equityUsd":7737.5,"capitalLossPct":0.5444723106933439,"legs":[{"symbol":"BTCUSDT","price":50600.00000000001,"pnlUsd":-6659.999999999999,"equityUsd":465.0000000000009,"liquidated":false},{"symbol":"ETHUSDT","price":1842.5000000000002,"pnlUsd":4072.499999999999,"equityUsd":7272.499999999999,"liquidated":false},{"symbol":"BTCUSD","price":50600.00000000001,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1842.5000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.44,"pnlUsd":-9210.795115499997,"equityUsd":7775,"capitalLossPct":0.5422645836046202,"legs":[{"symbol":"BTCUSDT","price":51520.00000000001,"pnlUsd":-6521.999999999999,"equityUsd":603.0000000000009,"liquidated":false},{"symbol":"ETHUSDT","price":1876.0000000000002,"pnlUsd":3971.999999999999,"equityUsd":7171.999999999999,"liquidated":false},{"symbol":"BTCUSD","price":51520.00000000001,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1876.0000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.43,"pnlUsd":-9173.295115499997,"equityUsd":7812.5,"capitalLossPct":0.5400568565158965,"legs":[{"symbol":"BTCUSDT","price":52440.00000000001,"pnlUsd":-6383.999999999999,"equityUsd":741.0000000000009,"liquidated":false},{"symbol":"ETHUSDT","price":1909.5000000000002,"pnlUsd":3871.499999999999,"equityUsd":7071.499999999999,"liquidated":false},{"symbol":"BTCUSD","price":52440.00000000001,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1909.5000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.42,"pnlUsd":-9135.795115499997,"equityUsd":7850,"capitalLossPct":0.5378491294271728,"legs":[{"symbol":"BTCUSDT","price":53360.00000000001,"pnlUsd":-6245.999999999999,"equityUsd":879.0000000000009,"liquidated":false},{"symbol":"ETHUSDT","price":1943.0000000000002,"pnlUsd":3770.999999999999,"equityUsd":6970.999999999999,"liquidated":false},{"symbol":"BTCUSD","price":53360.00000000001,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1943.0000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.41,"pnlUsd":-9098.295115499997,"equityUsd":7887.5,"capitalLossPct":0.535641402338449,"legs":[{"symbol":"BTCUSDT","price":54280.00000000001,"pnlUsd":-6107.999999999999,"equityUsd":1017.0000000000009,"liquidated":false},{"symbol":"ETHUSDT","price":1976.5000000000002,"pnlUsd":3670.499999999999,"equityUsd":6870.499999999999,"liquidated":false},{"symbol":"BTCUSD","price":54280.00000000001,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":1976.5000000000002,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.4,"pnlUsd":-9060.795115499997,"equityUsd":7925,"capitalLossPct":0.5334336752497254,"legs":[{"symbol":"BTCUSDT","price":55200,"pnlUsd":-5970,"equityUsd":1155,"liquidated":false},{"symbol":"ETHUSDT","price":2010,"pnlUsd":3570,"equityUsd":6770,"liquidated":false},{"symbol":"BTCUSD","price":55200,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2010,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.39,"pnlUsd":-9023.295115499997,"equityUsd":7962.5,"capitalLossPct":0.5312259481610018,"legs":[{"symbol":"BTCUSDT","price":56120,"pnlUsd":-5832,"equityUsd":1293,"liquidated":false},{"symbol":"ETHUSDT","price":2043.5,"pnlUsd":3469.5,"equityUsd":6669.5,"liquidated":false},{"symbol":"BTCUSD","price":56120,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2043.5,"pnlUsd":-2745.9016355000003,"equityUsd":0,"liquidated":true}]},{"move":-0.38,"pnlUsd":-8878.418068703111,"equityUsd":8107.377046796885,"capitalLossPct":0.5226966420077277,"legs":[{"symbol":"BTCUSDT","price":57040,"pnlUsd":-5694,"equityUsd":1431,"liquidated":false},{"symbol":"ETHUSDT","price":2077,"pnlUsd":3369,"equityUsd":6569,"liquidated":false},{"symbol":"BTCUSD","price":57040,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2077,"pnlUsd":-1595.0819672131147,"equityUsd":107.37704679688545,"liquidated":false}]},{"move":-0.37,"pnlUsd":-8758.541019561228,"equityUsd":8227.25409593877,"capitalLossPct":0.5156391537755464,"legs":[{"symbol":"BTCUSDT","price":57960,"pnlUsd":-5556,"equityUsd":1569,"liquidated":false},{"symbol":"ETHUSDT","price":2110.5,"pnlUsd":3268.5,"equityUsd":6468.5,"liquidated":false},{"symbol":"BTCUSD","price":57960,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2110.5,"pnlUsd":-1540.1639344262298,"equityUsd":189.7540959387702,"liquidated":false}]},{"move":-0.36,"pnlUsd":-8638.663970419342,"equityUsd":8347.131145080655,"capitalLossPct":0.508581665543365,"legs":[{"symbol":"BTCUSDT","price":58880,"pnlUsd":-5418,"equityUsd":1707,"liquidated":false},{"symbol":"ETHUSDT","price":2144,"pnlUsd":3168,"equityUsd":6368,"liquidated":false},{"symbol":"BTCUSD","price":58880,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2144,"pnlUsd":-1485.2459016393443,"equityUsd":272.13114508065587,"liquidated":false}]},{"move":-0.35,"pnlUsd":-8518.786921277457,"equityUsd":8467.00819422254,"capitalLossPct":0.5015241773111836,"legs":[{"symbol":"BTCUSDT","price":59800,"pnlUsd":-5280,"equityUsd":1845,"liquidated":false},{"symbol":"ETHUSDT","price":2177.5,"pnlUsd":3067.5,"equityUsd":6267.5,"liquidated":false},{"symbol":"BTCUSD","price":59800,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2177.5,"pnlUsd":-1430.327868852459,"equityUsd":354.5081942225411,"liquidated":false}]},{"move":-0.34,"pnlUsd":-8398.909872135571,"equityUsd":8586.885243364426,"capitalLossPct":0.49446668907900215,"legs":[{"symbol":"BTCUSDT","price":60719.99999999999,"pnlUsd":-5142.000000000001,"equityUsd":1982.999999999999,"liquidated":false},{"symbol":"ETHUSDT","price":2210.9999999999995,"pnlUsd":2967.0000000000014,"equityUsd":6167.000000000002,"liquidated":false},{"symbol":"BTCUSD","price":60719.99999999999,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2210.9999999999995,"pnlUsd":-1375.4098360655746,"equityUsd":436.88524336442515,"liquidated":false}]},{"move":-0.33,"pnlUsd":-8279.032822993686,"equityUsd":8706.762292506311,"capitalLossPct":0.4874092008468208,"legs":[{"symbol":"BTCUSDT","price":61639.99999999999,"pnlUsd":-5004.000000000001,"equityUsd":2120.999999999999,"liquidated":false},{"symbol":"ETHUSDT","price":2244.4999999999995,"pnlUsd":2866.5000000000014,"equityUsd":6066.500000000002,"liquidated":false},{"symbol":"BTCUSD","price":61639.99999999999,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2244.4999999999995,"pnlUsd":-1320.491803278689,"equityUsd":519.2622925063106,"liquidated":false}]},{"move":-0.32,"pnlUsd":-8159.1557738518,"equityUsd":8826.639341648197,"capitalLossPct":0.4803517126146394,"legs":[{"symbol":"BTCUSDT","price":62559.99999999999,"pnlUsd":-4866.000000000001,"equityUsd":2258.999999999999,"liquidated":false},{"symbol":"ETHUSDT","price":2278,"pnlUsd":2766,"equityUsd":5966,"liquidated":false},{"symbol":"BTCUSD","price":62559.99999999999,"pnlUsd":-3914.8934799999997,"equityUsd":0,"liquidated":true},{"symbol":"ETHUSD","price":2278,"pnlUsd":-1265.5737704918033,"equityUsd":601.6393416481967,"liquidated":false}]},{"move":-0.31,"pnlUsd":-7935.449032020555,"equityUsd":9050.346083479442,"capitalLossPct":0.4671814877114139,"legs":[{"symbol":"BTCUSDT","price":63479.99999999999,"pnlUsd":-4728.000000000001,"equityUsd":2396.999999999999,"liquidated":false},{"symbol":"ETHUSDT","price":2311.5,"pnlUsd":2665.5,"equityUsd":5865.5,"liquidated":false},{"symbol":"BTCUSD","price":63479.99999999999,"pnlUsd":-2597.446808510639,"equityUsd":103.8296926893604,"liquidated":false},{"symbol":"ETHUSD","price":2311.5,"pnlUsd":-1210.6557377049185,"equityUsd":684.0163907900817,"liquidated":false}]},{"move":-0.3,"pnlUsd":-7698.125175738243,"equityUsd":9287.669939761754,"capitalLossPct":0.4532095862096851,"legs":[{"symbol":"BTCUSDT","price":64399.99999999999,"pnlUsd":-4590.000000000001,"equityUsd":2534.999999999999,"liquidated":false},{"symbol":"ETHUSDT","price":2345,"pnlUsd":2565,"equityUsd":5765,"liquidated":false},{"symbol":"BTCUSD","price":64399.99999999999,"pnlUsd":-2519.1489361702124,"equityUsd":221.2764998297871,"liquidated":false},{"symbol":"ETHUSD","price":2345,"pnlUsd":-1155.7377049180325,"equityUsd":766.3934399319676,"liquidated":false}]},{"move":-0.29,"pnlUsd":-7460.801319455932,"equityUsd":9524.993796044066,"capitalLossPct":0.4392376847079563,"legs":[{"symbol":"BTCUSDT","price":65320,"pnlUsd":-4452,"equityUsd":2673,"liquidated":false},{"symbol":"ETHUSDT","price":2378.5,"pnlUsd":2464.5,"equityUsd":5664.5,"liquidated":false},{"symbol":"BTCUSD","price":65320,"pnlUsd":-2440.851063829786,"equityUsd":338.7233069702138,"liquidated":false},{"symbol":"ETHUSD","price":2378.5,"pnlUsd":-1100.8196721311479,"equityUsd":848.7704890738523,"liquidated":false}]},{"move":-0.28,"pnlUsd":-7223.477463173622,"equityUsd":9762.317652326376,"capitalLossPct":0.42526578320622765,"legs":[{"symbol":"BTCUSDT","price":66240,"pnlUsd":-4314,"equityUsd":2811,"liquidated":false},{"symbol":"ETHUSDT","price":2412,"pnlUsd":2364,"equityUsd":5564,"liquidated":false},{"symbol":"BTCUSD","price":66240,"pnlUsd":-2362.553191489361,"equityUsd":456.17011411063913,"liquidated":false},{"symbol":"ETHUSD","price":2412,"pnlUsd":-1045.9016393442625,"equityUsd":931.1475382157375,"liquidated":false}]},{"move":-0.27,"pnlUsd":-6986.153606891308,"equityUsd":9999.641508608689,"capitalLossPct":0.41129388170449876,"legs":[{"symbol":"BTCUSDT","price":67160,"pnlUsd":-4176,"equityUsd":2949,"liquidated":false},{"symbol":"ETHUSDT","price":2445.5,"pnlUsd":2263.5,"equityUsd":5463.5,"liquidated":false},{"symbol":"BTCUSD","price":67160,"pnlUsd":-2284.2553191489355,"equityUsd":573.6169212510645,"liquidated":false},{"symbol":"ETHUSD","price":2445.5,"pnlUsd":-990.9836065573769,"equityUsd":1013.5245873576233,"liquidated":false}]},{"move":-0.26,"pnlUsd":-6748.829750609,"equityUsd":10236.965364890997,"capitalLossPct":0.3973219802027702,"legs":[{"symbol":"BTCUSDT","price":68080,"pnlUsd":-4038,"equityUsd":3087,"liquidated":false},{"symbol":"ETHUSDT","price":2479,"pnlUsd":2163,"equityUsd":5363,"liquidated":false},{"symbol":"BTCUSD","price":68080,"pnlUsd":-2205.95744680851,"equityUsd":691.0637283914898,"liquidated":false},{"symbol":"ETHUSD","price":2479,"pnlUsd":-936.0655737704917,"equityUsd":1095.9016364995084,"liquidated":false}]},{"move":-0.25,"pnlUsd":-6511.505894326689,"equityUsd":10474.289221173309,"capitalLossPct":0.38335007870104143,"legs":[{"symbol":"BTCUSDT","price":69000,"pnlUsd":-3900,"equityUsd":3225,"liquidated":false},{"symbol":"ETHUSDT","price":2512.5,"pnlUsd":2062.5,"equityUsd":5262.5,"liquidated":false},{"symbol":"BTCUSD","price":69000,"pnlUsd":-2127.6595744680844,"equityUsd":808.5105355319156,"liquidated":false},{"symbol":"ETHUSD","price":2512.5,"pnlUsd":-881.1475409836064,"equityUsd":1178.2786856413938,"liquidated":false}]},{"move":-0.24,"pnlUsd":-6274.182038044379,"equityUsd":10711.613077455619,"capitalLossPct":0.36937817719931276,"legs":[{"symbol":"BTCUSDT","price":69920,"pnlUsd":-3762,"equityUsd":3363,"liquidated":false},{"symbol":"ETHUSDT","price":2546,"pnlUsd":1962,"equityUsd":5162,"liquidated":false},{"symbol":"BTCUSD","price":69920,"pnlUsd":-2049.3617021276596,"equityUsd":925.9573426723405,"liquidated":false},{"symbol":"ETHUSD","price":2546,"pnlUsd":-826.2295081967216,"equityUsd":1260.6557347832784,"liquidated":false}]},{"move":-0.23,"pnlUsd":-6036.858181762067,"equityUsd":10948.93693373793,"capitalLossPct":0.355406275697584,"legs":[{"symbol":"BTCUSDT","price":70840,"pnlUsd":-3624,"equityUsd":3501,"liquidated":false},{"symbol":"ETHUSDT","price":2579.5,"pnlUsd":1861.5,"equityUsd":5061.5,"liquidated":false},{"symbol":"BTCUSD","price":70840,"pnlUsd":-1971.0638297872335,"equityUsd":1043.4041498127665,"liquidated":false},{"symbol":"ETHUSD","price":2579.5,"pnlUsd":-771.3114754098358,"equityUsd":1343.0327839251643,"liquidated":false}]},{"move":-0.22,"pnlUsd":-5799.534325479755,"equityUsd":11186.260790020242,"capitalLossPct":0.3414343741958552,"legs":[{"symbol":"BTCUSDT","price":71760,"pnlUsd":-3486,"equityUsd":3639,"liquidated":false},{"symbol":"ETHUSDT","price":2613,"pnlUsd":1761,"equityUsd":4961,"liquidated":false},{"symbol":"BTCUSD","price":71760,"pnlUsd":-1892.7659574468084,"equityUsd":1160.8509569531916,"liquidated":false},{"symbol":"ETHUSD","price":2613,"pnlUsd":-716.3934426229509,"equityUsd":1425.4098330670492,"liquidated":false}]},{"move":-0.21,"pnlUsd":-5562.2104691974455,"equityUsd":11423.584646302552,"capitalLossPct":0.32746247269412654,"legs":[{"symbol":"BTCUSDT","price":72680,"pnlUsd":-3348,"equityUsd":3777,"liquidated":false},{"symbol":"ETHUSDT","price":2646.5,"pnlUsd":1660.5,"equityUsd":4860.5,"liquidated":false},{"symbol":"BTCUSD","price":72680,"pnlUsd":-1814.4680851063824,"equityUsd":1278.2977640936176,"liquidated":false},{"symbol":"ETHUSD","price":2646.5,"pnlUsd":-661.4754098360659,"equityUsd":1507.7868822089345,"liquidated":false}]},{"move":-0.2,"pnlUsd":-5324.886612915134,"equityUsd":11660.908502584864,"capitalLossPct":0.31349057119239776,"legs":[{"symbol":"BTCUSDT","price":73600,"pnlUsd":-3210,"equityUsd":3915,"liquidated":false},{"symbol":"ETHUSDT","price":2680,"pnlUsd":1560,"equityUsd":4760,"liquidated":false},{"symbol":"BTCUSD","price":73600,"pnlUsd":-1736.1702127659573,"equityUsd":1395.7445712340427,"liquidated":false},{"symbol":"ETHUSD","price":2680,"pnlUsd":-606.5573770491803,"equityUsd":1590.1639313508197,"liquidated":false}]},{"move":-0.19,"pnlUsd":-5087.562756632826,"equityUsd":11898.232358867172,"capitalLossPct":0.2995186696906692,"legs":[{"symbol":"BTCUSDT","price":74520,"pnlUsd":-3072,"equityUsd":4053,"liquidated":false},{"symbol":"ETHUSDT","price":2713.5,"pnlUsd":1459.5,"equityUsd":4659.5,"liquidated":false},{"symbol":"BTCUSD","price":74520,"pnlUsd":-1657.872340425531,"equityUsd":1513.1913783744685,"liquidated":false},{"symbol":"ETHUSD","price":2713.5,"pnlUsd":-551.6393442622951,"equityUsd":1672.5409804927049,"liquidated":false}]},{"move":-0.18,"pnlUsd":-4850.238900350512,"equityUsd":12135.556215149485,"capitalLossPct":0.2855467681889403,"legs":[{"symbol":"BTCUSDT","price":75440,"pnlUsd":-2934,"equityUsd":4191,"liquidated":false},{"symbol":"ETHUSDT","price":2747,"pnlUsd":1359,"equityUsd":4559,"liquidated":false},{"symbol":"BTCUSD","price":75440,"pnlUsd":-1579.5744680851058,"equityUsd":1630.6381855148938,"liquidated":false},{"symbol":"ETHUSD","price":2747,"pnlUsd":-496.7213114754096,"equityUsd":1754.9180296345908,"liquidated":false}]},{"move":-0.17,"pnlUsd":-4612.915044068204,"equityUsd":12372.880071431793,"capitalLossPct":0.27157486668721176,"legs":[{"symbol":"BTCUSDT","price":76360,"pnlUsd":-2796,"equityUsd":4329,"liquidated":false},{"symbol":"ETHUSDT","price":2780.5,"pnlUsd":1258.5,"equityUsd":4458.5,"liquidated":false},{"symbol":"BTCUSD","price":76360,"pnlUsd":-1501.2765957446807,"equityUsd":1748.084992655319,"liquidated":false},{"symbol":"ETHUSD","price":2780.5,"pnlUsd":-441.80327868852453,"equityUsd":1837.2950787764753,"liquidated":false}]},{"move":-0.16,"pnlUsd":-4375.5911877858925,"equityUsd":12610.203927714105,"capitalLossPct":0.257602965185483,"legs":[{"symbol":"BTCUSDT","price":77280,"pnlUsd":-2658,"equityUsd":4467,"liquidated":false},{"symbol":"ETHUSDT","price":2814,"pnlUsd":1158,"equityUsd":4358,"liquidated":false},{"symbol":"BTCUSD","price":77280,"pnlUsd":-1422.9787234042549,"equityUsd":1865.5317997957447,"liquidated":false},{"symbol":"ETHUSD","price":2814,"pnlUsd":-386.8852459016392,"equityUsd":1919.6721279183607,"liquidated":false}]},{"move":-0.15,"pnlUsd":-4138.267331503583,"equityUsd":12847.527783996415,"capitalLossPct":0.2436310636837543,"legs":[{"symbol":"BTCUSDT","price":78200,"pnlUsd":-2520,"equityUsd":4605,"liquidated":false},{"symbol":"ETHUSDT","price":2847.5,"pnlUsd":1057.5,"equityUsd":4257.5,"liquidated":false},{"symbol":"BTCUSD","price":78200,"pnlUsd":-1344.6808510638298,"equityUsd":1982.9786069361699,"liquidated":false},{"symbol":"ETHUSD","price":2847.5,"pnlUsd":-331.96721311475443,"equityUsd":2002.0491770602457,"liquidated":false}]},{"move":-0.14,"pnlUsd":-3900.943475221271,"equityUsd":13084.851640278726,"capitalLossPct":0.22965916218202553,"legs":[{"symbol":"BTCUSDT","price":79120,"pnlUsd":-2382,"equityUsd":4743,"liquidated":false},{"symbol":"ETHUSDT","price":2881,"pnlUsd":957,"equityUsd":4157,"liquidated":false},{"symbol":"BTCUSD","price":79120,"pnlUsd":-1266.382978723404,"equityUsd":2100.4254140765956,"liquidated":false},{"symbol":"ETHUSD","price":2881,"pnlUsd":-277.04918032786884,"equityUsd":2084.4262262021316,"liquidated":false}]},{"move":-0.13,"pnlUsd":-3663.6196189389593,"equityUsd":13322.175496561038,"capitalLossPct":0.21568726068029676,"legs":[{"symbol":"BTCUSDT","price":80040,"pnlUsd":-2244,"equityUsd":4881,"liquidated":false},{"symbol":"ETHUSDT","price":2914.5,"pnlUsd":856.5,"equityUsd":4056.5,"liquidated":false},{"symbol":"BTCUSD","price":80040,"pnlUsd":-1188.0851063829784,"equityUsd":2217.8722212170214,"liquidated":false},{"symbol":"ETHUSD","price":2914.5,"pnlUsd":-222.13114754098328,"equityUsd":2166.8032753440166,"liquidated":false}]},{"move":-0.12,"pnlUsd":-3426.2957626566476,"equityUsd":13559.49935284335,"capitalLossPct":0.20171535917856798,"legs":[{"symbol":"BTCUSDT","price":80960,"pnlUsd":-2106,"equityUsd":5019,"liquidated":false},{"symbol":"ETHUSDT","price":2948,"pnlUsd":756,"equityUsd":3956,"liquidated":false},{"symbol":"BTCUSD","price":80960,"pnlUsd":-1109.7872340425527,"equityUsd":2335.3190283574468,"liquidated":false},{"symbol":"ETHUSD","price":2948,"pnlUsd":-167.21311475409797,"equityUsd":2249.180324485902,"liquidated":false}]},{"move":-0.11,"pnlUsd":-3188.9719063743396,"equityUsd":13796.823209125658,"capitalLossPct":0.18774345767683942,"legs":[{"symbol":"BTCUSDT","price":81880,"pnlUsd":-1968,"equityUsd":5157,"liquidated":false},{"symbol":"ETHUSDT","price":2981.5,"pnlUsd":655.5,"equityUsd":3855.5,"liquidated":false},{"symbol":"BTCUSD","price":81880,"pnlUsd":-1031.4893617021276,"equityUsd":2452.765835497872,"liquidated":false},{"symbol":"ETHUSD","price":2981.5,"pnlUsd":-112.29508196721352,"equityUsd":2331.5573736277865,"liquidated":false}]},{"move":-0.1,"pnlUsd":-2951.648050092026,"equityUsd":14034.147065407971,"capitalLossPct":0.17377155617511053,"legs":[{"symbol":"BTCUSDT","price":82800,"pnlUsd":-1830,"equityUsd":5295,"liquidated":false},{"symbol":"ETHUSDT","price":3015,"pnlUsd":555,"equityUsd":3755,"liquidated":false},{"symbol":"BTCUSD","price":82800,"pnlUsd":-953.1914893617015,"equityUsd":2570.2126426382983,"liquidated":false},{"symbol":"ETHUSD","price":3015,"pnlUsd":-57.37704918032783,"equityUsd":2413.934422769672,"liquidated":false}]},{"move":-0.09,"pnlUsd":-2714.3241938097162,"equityUsd":14271.470921690281,"capitalLossPct":0.15979965467338186,"legs":[{"symbol":"BTCUSDT","price":83720,"pnlUsd":-1692,"equityUsd":5433,"liquidated":false},{"symbol":"ETHUSDT","price":3048.5,"pnlUsd":454.5,"equityUsd":3654.5,"liquidated":false},{"symbol":"BTCUSD","price":83720,"pnlUsd":-874.8936170212759,"equityUsd":2687.6594497787237,"liquidated":false},{"symbol":"ETHUSD","price":3048.5,"pnlUsd":-2.4590163934422775,"equityUsd":2496.311471911558,"liquidated":false}]},{"move":-0.08,"pnlUsd":-2477.0003375274046,"equityUsd":14508.794777972593,"capitalLossPct":0.14582775317165309,"legs":[{"symbol":"BTCUSDT","price":84640,"pnlUsd":-1554,"equityUsd":5571,"liquidated":false},{"symbol":"ETHUSDT","price":3082,"pnlUsd":354,"equityUsd":3554,"liquidated":false},{"symbol":"BTCUSD","price":84640,"pnlUsd":-796.5957446808511,"equityUsd":2805.1062569191486,"liquidated":false},{"symbol":"ETHUSD","price":3082,"pnlUsd":52.45901639344293,"equityUsd":2578.6885210534433,"liquidated":false}]},{"move":-0.07,"pnlUsd":-2239.676481245093,"equityUsd":14746.118634254904,"capitalLossPct":0.1318558516699243,"legs":[{"symbol":"BTCUSDT","price":85560,"pnlUsd":-1416,"equityUsd":5709,"liquidated":false},{"symbol":"ETHUSDT","price":3115.5,"pnlUsd":253.5,"equityUsd":3453.5,"liquidated":false},{"symbol":"BTCUSD","price":85560,"pnlUsd":-718.2978723404256,"equityUsd":2922.5530640595744,"liquidated":false},{"symbol":"ETHUSD","price":3115.5,"pnlUsd":107.37704918032826,"equityUsd":2661.0655701953287,"liquidated":false}]},{"move":-0.06,"pnlUsd":-2002.352624962783,"equityUsd":14983.442490537214,"capitalLossPct":0.11788395016819564,"legs":[{"symbol":"BTCUSDT","price":86480,"pnlUsd":-1278,"equityUsd":5847,"liquidated":false},{"symbol":"ETHUSDT","price":3149,"pnlUsd":153,"equityUsd":3353,"liquidated":false},{"symbol":"BTCUSD","price":86480,"pnlUsd":-639.9999999999993,"equityUsd":3039.9998712000006,"liquidated":false},{"symbol":"ETHUSD","price":3149,"pnlUsd":162.29508196721295,"equityUsd":2743.442619337213,"liquidated":false}]},{"move":-0.05,"pnlUsd":-1765.0287686804731,"equityUsd":15220.766346819524,"capitalLossPct":0.10391204866646697,"legs":[{"symbol":"BTCUSDT","price":87400,"pnlUsd":-1140,"equityUsd":5985,"liquidated":false},{"symbol":"ETHUSDT","price":3182.5,"pnlUsd":52.5,"equityUsd":3252.5,"liquidated":false},{"symbol":"BTCUSD","price":87400,"pnlUsd":-561.702127659574,"equityUsd":3157.446678340426,"liquidated":false},{"symbol":"ETHUSD","price":3182.5,"pnlUsd":217.21311475409854,"equityUsd":2825.8196684790987,"liquidated":false}]},{"move":-0.04,"pnlUsd":-1527.7049123981633,"equityUsd":15458.090203101834,"capitalLossPct":0.0899401471647383,"legs":[{"symbol":"BTCUSDT","price":88320,"pnlUsd":-1002,"equityUsd":6123,"liquidated":false},{"symbol":"ETHUSDT","price":3216,"pnlUsd":-48,"equityUsd":3152,"liquidated":false},{"symbol":"BTCUSD","price":88320,"pnlUsd":-483.40425531914866,"equityUsd":3274.8934854808513,"liquidated":false},{"symbol":"ETHUSD","price":3216,"pnlUsd":272.1311475409837,"equityUsd":2908.196717620984,"liquidated":false}]},{"move":-0.03,"pnlUsd":-1290.3810561158516,"equityUsd":15695.414059384146,"capitalLossPct":0.07596824566300953,"legs":[{"symbol":"BTCUSDT","price":89240,"pnlUsd":-864,"equityUsd":6261,"liquidated":false},{"symbol":"ETHUSDT","price":3249.5,"pnlUsd":-148.5,"equityUsd":3051.5,"liquidated":false},{"symbol":"BTCUSD","price":89240,"pnlUsd":-405.1063829787227,"equityUsd":3392.340292621277,"liquidated":false},{"symbol":"ETHUSD","price":3249.5,"pnlUsd":327.04918032786895,"equityUsd":2990.573766762869,"liquidated":false}]},{"move":-0.02,"pnlUsd":-1053.05719983354,"equityUsd":15932.737915666457,"capitalLossPct":0.06199634416128075,"legs":[{"symbol":"BTCUSDT","price":90160,"pnlUsd":-726,"equityUsd":6399,"liquidated":false},{"symbol":"ETHUSDT","price":3283,"pnlUsd":-249,"equityUsd":2951,"liquidated":false},{"symbol":"BTCUSD","price":90160,"pnlUsd":-326.8085106382977,"equityUsd":3509.787099761702,"liquidated":false},{"symbol":"ETHUSD","price":3283,"pnlUsd":381.9672131147539,"equityUsd":3072.950815904754,"liquidated":false}]},{"move":-0.01,"pnlUsd":-815.7333435512301,"equityUsd":16170.061771948767,"capitalLossPct":0.04802444265955208,"legs":[{"symbol":"BTCUSDT","price":91080,"pnlUsd":-588,"equityUsd":6537,"liquidated":false},{"symbol":"ETHUSDT","price":3316.5,"pnlUsd":-349.5,"equityUsd":2850.5,"liquidated":false},{"symbol":"BTCUSD","price":91080,"pnlUsd":-248.5106382978725,"equityUsd":3627.2339069021273,"liquidated":false},{"symbol":"ETHUSD","price":3316.5,"pnlUsd":436.8852459016396,"equityUsd":3155.32786504664,"liquidated":false}]},{"move":0,"pnlUsd":-578.4094872689202,"equityUsd":16407.385628231077,"capitalLossPct":0.03405254115782341,"legs":[{"symbol":"BTCUSDT","price":92000,"pnlUsd":-450,"equityUsd":6675,"liquidated":false},{"symbol":"ETHUSDT","price":3350,"pnlUsd":-450,"equityUsd":2750,"liquidated":false},{"symbol":"BTCUSD","price":92000,"pnlUsd":-170.21276595744695,"equityUsd":3744.6807140425526,"liquidated":false},{"symbol":"ETHUSD","price":3350,"pnlUsd":491.80327868852453,"equityUsd":3237.704914188525,"liquidated":false}]},{"move":0.01,"pnlUsd":-341.08563098661034,"equityUsd":16644.709484513387,"capitalLossPct":0.020080639656094745,"legs":[{"symbol":"BTCUSDT","price":92920,"pnlUsd":-312,"equityUsd":6813,"liquidated":false},{"symbol":"ETHUSDT","price":3383.5,"pnlUsd":-550.5,"equityUsd":2649.5,"liquidated":false},{"symbol":"BTCUSD","price":92920,"pnlUsd":-91.91489361702094,"equityUsd":3862.127521182979,"liquidated":false},{"symbol":"ETHUSD","price":3383.5,"pnlUsd":546.7213114754101,"equityUsd":3320.08196333041,"liquidated":false}]},{"move":0.02,"pnlUsd":-103.76177470429684,"equityUsd":16882.0333407957,"capitalLossPct":0.006108738154365856,"legs":[{"symbol":"BTCUSDT","price":93840,"pnlUsd":-174,"equityUsd":6951,"liquidated":false},{"symbol":"ETHUSDT","price":3417,"pnlUsd":-651,"equityUsd":2549,"liquidated":false},{"symbol":"BTCUSD","price":93840,"pnlUsd":-13.61702127659503,"equityUsd":3979.5743283234046,"liquidated":false},{"symbol":"ETHUSD","price":3417,"pnlUsd":601.639344262295,"equityUsd":3402.4590124722954,"liquidated":false}]},{"move":0.03,"pnlUsd":133.56208157801302,"equityUsd":17119.35719707801,"capitalLossPct":-0.0078631633473627,"legs":[{"symbol":"BTCUSDT","price":94760,"pnlUsd":-36,"equityUsd":7089,"liquidated":false},{"symbol":"ETHUSDT","price":3450.5,"pnlUsd":-751.5,"equityUsd":2448.5,"liquidated":false},{"symbol":"BTCUSD","price":94760,"pnlUsd":64.68085106383,"equityUsd":4097.0211354638295,"liquidated":false},{"symbol":"ETHUSD","price":3450.5,"pnlUsd":656.5573770491801,"equityUsd":3484.8360616141804,"liquidated":false}]},{"move":0.04,"pnlUsd":370.8859378603265,"equityUsd":17356.681053360324,"capitalLossPct":-0.0218350648490917,"legs":[{"symbol":"BTCUSDT","price":95680,"pnlUsd":102,"equityUsd":7227,"liquidated":false},{"symbol":"ETHUSDT","price":3484,"pnlUsd":-852,"equityUsd":2348,"liquidated":false},{"symbol":"BTCUSD","price":95680,"pnlUsd":142.9787234042562,"equityUsd":4214.467942604256,"liquidated":false},{"symbol":"ETHUSD","price":3484,"pnlUsd":711.4754098360655,"equityUsd":3567.213110756066,"liquidated":false}]},{"move":0.05,"pnlUsd":608.2097941426364,"equityUsd":17594.004909642634,"capitalLossPct":-0.03580696635082026,"legs":[{"symbol":"BTCUSDT","price":96600,"pnlUsd":240,"equityUsd":7365,"liquidated":false},{"symbol":"ETHUSDT","price":3517.5,"pnlUsd":-952.5,"equityUsd":2247.5,"liquidated":false},{"symbol":"BTCUSD","price":96600,"pnlUsd":221.27659574468188,"equityUsd":4331.914749744682,"liquidated":false},{"symbol":"ETHUSD","price":3517.5,"pnlUsd":766.3934426229507,"equityUsd":3649.590159897951,"liquidated":false}]},{"move":0.06,"pnlUsd":845.5336504249462,"equityUsd":17831.328765924944,"capitalLossPct":-0.049778867852549036,"legs":[{"symbol":"BTCUSDT","price":97520,"pnlUsd":378,"equityUsd":7503,"liquidated":false},{"symbol":"ETHUSDT","price":3551,"pnlUsd":-1053,"equityUsd":2147,"liquidated":false},{"symbol":"BTCUSD","price":97520,"pnlUsd":299.5744680851069,"equityUsd":4449.361556885106,"liquidated":false},{"symbol":"ETHUSD","price":3551,"pnlUsd":821.3114754098364,"equityUsd":3731.9672090398367,"liquidated":false}]},{"move":0.07,"pnlUsd":1082.8575067072597,"equityUsd":18068.652622207257,"capitalLossPct":-0.06375076935427781,"legs":[{"symbol":"BTCUSDT","price":98440,"pnlUsd":516,"equityUsd":7641,"liquidated":false},{"symbol":"ETHUSDT","price":3584.5,"pnlUsd":-1153.5,"equityUsd":2046.5,"liquidated":false},{"symbol":"BTCUSD","price":98440,"pnlUsd":377.8723404255329,"equityUsd":4566.808364025534,"liquidated":false},{"symbol":"ETHUSD","price":3584.5,"pnlUsd":876.2295081967214,"equityUsd":3814.3442581817217,"liquidated":false}]},{"move":0.08,"pnlUsd":1320.1813629895623,"equityUsd":18305.97647848956,"capitalLossPct":-0.07772267085600615,"legs":[{"symbol":"BTCUSDT","price":99360,"pnlUsd":654,"equityUsd":7779,"liquidated":false},{"symbol":"ETHUSDT","price":3618.0000000000005,"pnlUsd":-1254.0000000000014,"equityUsd":1945.9999999999986,"liquidated":false},{"symbol":"BTCUSD","price":99360,"pnlUsd":456.1702127659577,"equityUsd":4684.255171165957,"liquidated":false},{"symbol":"ETHUSD","price":3618.0000000000005,"pnlUsd":931.1475409836069,"equityUsd":3896.721307323607,"liquidated":false}]},{"move":0.09,"pnlUsd":1557.5052192718795,"equityUsd":18543.300334771877,"capitalLossPct":-0.09169457235773515,"legs":[{"symbol":"BTCUSDT","price":100280.00000000001,"pnlUsd":792.0000000000022,"equityUsd":7917.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":3651.5000000000005,"pnlUsd":-1354.5000000000014,"equityUsd":1845.4999999999986,"liquidated":false},{"symbol":"BTCUSD","price":100280.00000000001,"pnlUsd":534.468085106384,"equityUsd":4801.701978306384,"liquidated":false},{"symbol":"ETHUSD","price":3651.5000000000005,"pnlUsd":986.0655737704923,"equityUsd":3979.098356465493,"liquidated":false}]},{"move":0.1,"pnlUsd":1794.829075554193,"equityUsd":18780.62419105419,"capitalLossPct":-0.10566647385946415,"legs":[{"symbol":"BTCUSDT","price":101200.00000000001,"pnlUsd":930.0000000000022,"equityUsd":8055.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":3685.0000000000005,"pnlUsd":-1455.0000000000014,"equityUsd":1744.9999999999986,"liquidated":false},{"symbol":"BTCUSD","price":101200.00000000001,"pnlUsd":612.7659574468103,"equityUsd":4919.1487854468105,"liquidated":false},{"symbol":"ETHUSD","price":3685.0000000000005,"pnlUsd":1040.9836065573777,"equityUsd":4061.4754056073784,"liquidated":false}]},{"move":0.11,"pnlUsd":2032.1529318364992,"equityUsd":19017.948047336497,"capitalLossPct":-0.11963837536119248,"legs":[{"symbol":"BTCUSDT","price":102120.00000000001,"pnlUsd":1068.000000000002,"equityUsd":8193.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":3718.5000000000005,"pnlUsd":-1555.5000000000014,"equityUsd":1644.4999999999986,"liquidated":false},{"symbol":"BTCUSD","price":102120.00000000001,"pnlUsd":691.0638297872351,"equityUsd":5036.595592587235,"liquidated":false},{"symbol":"ETHUSD","price":3718.5000000000005,"pnlUsd":1095.9016393442628,"equityUsd":4143.852454749263,"liquidated":false}]},{"move":0.12,"pnlUsd":2269.4767881188163,"equityUsd":19255.271903618814,"capitalLossPct":-0.1336102768629217,"legs":[{"symbol":"BTCUSDT","price":103040.00000000001,"pnlUsd":1206.000000000002,"equityUsd":8331.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":3752.0000000000005,"pnlUsd":-1656.0000000000014,"equityUsd":1543.9999999999986,"liquidated":false},{"symbol":"BTCUSD","price":103040.00000000001,"pnlUsd":769.3617021276613,"equityUsd":5154.042399727662,"liquidated":false},{"symbol":"ETHUSD","price":3752.0000000000005,"pnlUsd":1150.819672131149,"equityUsd":4226.22950389115,"liquidated":false}]},{"move":0.13,"pnlUsd":2506.800644401119,"equityUsd":19492.595759901116,"capitalLossPct":-0.14758217836464982,"legs":[{"symbol":"BTCUSDT","price":103959.99999999999,"pnlUsd":1343.9999999999977,"equityUsd":8468.999999999998,"liquidated":false},{"symbol":"ETHUSDT","price":3785.4999999999995,"pnlUsd":-1756.4999999999986,"equityUsd":1443.5000000000014,"liquidated":false},{"symbol":"BTCUSD","price":103959.99999999999,"pnlUsd":847.6595744680848,"equityUsd":5271.489206868084,"liquidated":false},{"symbol":"ETHUSD","price":3785.4999999999995,"pnlUsd":1205.7377049180318,"equityUsd":4308.606553033032,"liquidated":false}]},{"move":0.14,"pnlUsd":2744.124500683436,"equityUsd":19729.919616183433,"capitalLossPct":-0.16155407986637904,"legs":[{"symbol":"BTCUSDT","price":104880.00000000001,"pnlUsd":1482.000000000002,"equityUsd":8607.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":3819.0000000000005,"pnlUsd":-1857.0000000000014,"equityUsd":1342.9999999999986,"liquidated":false},{"symbol":"BTCUSD","price":104880.00000000001,"pnlUsd":925.9574468085123,"equityUsd":5388.936014008513,"liquidated":false},{"symbol":"ETHUSD","price":3819.0000000000005,"pnlUsd":1260.655737704919,"equityUsd":4390.98360217492,"liquidated":false}]},{"move":0.15,"pnlUsd":2981.4483569657386,"equityUsd":19967.243472465736,"capitalLossPct":-0.17552598136810715,"legs":[{"symbol":"BTCUSDT","price":105799.99999999999,"pnlUsd":1619.9999999999977,"equityUsd":8744.999999999998,"liquidated":false},{"symbol":"ETHUSDT","price":3852.4999999999995,"pnlUsd":-1957.4999999999986,"equityUsd":1242.5000000000014,"liquidated":false},{"symbol":"BTCUSD","price":105799.99999999999,"pnlUsd":1004.2553191489358,"equityUsd":5506.382821148935,"liquidated":false},{"symbol":"ETHUSD","price":3852.4999999999995,"pnlUsd":1315.5737704918024,"equityUsd":4473.360651316802,"liquidated":false}]},{"move":0.16,"pnlUsd":3218.772213248052,"equityUsd":20204.56732874805,"capitalLossPct":-0.18949788286983615,"legs":[{"symbol":"BTCUSDT","price":106719.99999999999,"pnlUsd":1757.9999999999977,"equityUsd":8882.999999999998,"liquidated":false},{"symbol":"ETHUSDT","price":3885.9999999999995,"pnlUsd":-2057.9999999999986,"equityUsd":1142.0000000000014,"liquidated":false},{"symbol":"BTCUSD","price":106719.99999999999,"pnlUsd":1082.553191489361,"equityUsd":5623.82962828936,"liquidated":false},{"symbol":"ETHUSD","price":3885.9999999999995,"pnlUsd":1370.491803278688,"equityUsd":4555.737700458688,"liquidated":false}]},{"move":0.17,"pnlUsd":3456.0960695303656,"equityUsd":20441.891185030363,"capitalLossPct":-0.20346978437156493,"legs":[{"symbol":"BTCUSDT","price":107640,"pnlUsd":1896,"equityUsd":9021,"liquidated":false},{"symbol":"ETHUSDT","price":3919.4999999999995,"pnlUsd":-2158.4999999999986,"equityUsd":1041.5000000000014,"liquidated":false},{"symbol":"BTCUSD","price":107640,"pnlUsd":1160.8510638297876,"equityUsd":5741.276435429787,"liquidated":false},{"symbol":"ETHUSD","price":3919.4999999999995,"pnlUsd":1425.4098360655735,"equityUsd":4638.114749600573,"liquidated":false}]},{"move":0.18,"pnlUsd":3693.4199258126755,"equityUsd":20679.215041312673,"capitalLossPct":-0.2174416858732937,"legs":[{"symbol":"BTCUSDT","price":108560,"pnlUsd":2034,"equityUsd":9159,"liquidated":false},{"symbol":"ETHUSDT","price":3953,"pnlUsd":-2259,"equityUsd":941,"liquidated":false},{"symbol":"BTCUSD","price":108560,"pnlUsd":1239.1489361702127,"equityUsd":5858.723242570212,"liquidated":false},{"symbol":"ETHUSD","price":3953,"pnlUsd":1480.3278688524595,"equityUsd":4720.49179874246,"liquidated":false}]},{"move":0.19,"pnlUsd":3930.7437820949854,"equityUsd":20916.538897594983,"capitalLossPct":-0.23141358737502227,"legs":[{"symbol":"BTCUSDT","price":109480,"pnlUsd":2172,"equityUsd":9297,"liquidated":false},{"symbol":"ETHUSDT","price":3986.5,"pnlUsd":-2359.5,"equityUsd":840.5,"liquidated":false},{"symbol":"BTCUSD","price":109480,"pnlUsd":1317.4468085106394,"equityUsd":5976.1700497106385,"liquidated":false},{"symbol":"ETHUSD","price":3986.5,"pnlUsd":1535.2459016393439,"equityUsd":4802.868847884344,"liquidated":false}]},{"move":0.2,"pnlUsd":4168.067638377295,"equityUsd":21153.862753877293,"capitalLossPct":-0.24538548887675105,"legs":[{"symbol":"BTCUSDT","price":110400,"pnlUsd":2310,"equityUsd":9435,"liquidated":false},{"symbol":"ETHUSDT","price":4020,"pnlUsd":-2460,"equityUsd":740,"liquidated":false},{"symbol":"BTCUSD","price":110400,"pnlUsd":1395.7446808510645,"equityUsd":6093.616856851064,"liquidated":false},{"symbol":"ETHUSD","price":4020,"pnlUsd":1590.1639344262298,"equityUsd":4885.2458970262305,"liquidated":false}]},{"move":0.21,"pnlUsd":4405.391494659605,"equityUsd":21391.186610159602,"capitalLossPct":-0.2593573903784796,"legs":[{"symbol":"BTCUSDT","price":111320,"pnlUsd":2448,"equityUsd":9573,"liquidated":false},{"symbol":"ETHUSDT","price":4053.5,"pnlUsd":-2560.5,"equityUsd":639.5,"liquidated":false},{"symbol":"BTCUSD","price":111320,"pnlUsd":1474.042553191489,"equityUsd":6211.063663991488,"liquidated":false},{"symbol":"ETHUSD","price":4053.5,"pnlUsd":1645.0819672131151,"equityUsd":4967.622946168116,"liquidated":false}]},{"move":0.22,"pnlUsd":4642.715350941919,"equityUsd":21628.510466441916,"capitalLossPct":-0.2733292918802086,"legs":[{"symbol":"BTCUSDT","price":112240,"pnlUsd":2586,"equityUsd":9711,"liquidated":false},{"symbol":"ETHUSDT","price":4087,"pnlUsd":-2661,"equityUsd":539,"liquidated":false},{"symbol":"BTCUSD","price":112240,"pnlUsd":1552.3404255319147,"equityUsd":6328.5104711319145,"liquidated":false},{"symbol":"ETHUSD","price":4087,"pnlUsd":1700.0000000000002,"equityUsd":5049.9999953100005,"liquidated":false}]},{"move":0.23,"pnlUsd":4880.039207224228,"equityUsd":21865.834322724226,"capitalLossPct":-0.28730119338193716,"legs":[{"symbol":"BTCUSDT","price":113160,"pnlUsd":2724,"equityUsd":9849,"liquidated":false},{"symbol":"ETHUSDT","price":4120.5,"pnlUsd":-2761.5,"equityUsd":438.5,"liquidated":false},{"symbol":"BTCUSD","price":113160,"pnlUsd":1630.638297872341,"equityUsd":6445.957278272341,"liquidated":false},{"symbol":"ETHUSD","price":4120.5,"pnlUsd":1754.9180327868855,"equityUsd":5132.377044451886,"liquidated":false}]},{"move":0.24,"pnlUsd":5117.363063506542,"equityUsd":22103.15817900654,"capitalLossPct":-0.30127309488366594,"legs":[{"symbol":"BTCUSDT","price":114080,"pnlUsd":2862,"equityUsd":9987,"liquidated":false},{"symbol":"ETHUSDT","price":4154,"pnlUsd":-2862,"equityUsd":338,"liquidated":false},{"symbol":"BTCUSD","price":114080,"pnlUsd":1708.9361702127662,"equityUsd":6563.404085412766,"liquidated":false},{"symbol":"ETHUSD","price":4154,"pnlUsd":1809.8360655737704,"equityUsd":5214.75409359377,"liquidated":false}]},{"move":0.25,"pnlUsd":5354.686919788852,"equityUsd":22340.48203528885,"capitalLossPct":-0.3152449963853947,"legs":[{"symbol":"BTCUSDT","price":115000,"pnlUsd":3000,"equityUsd":10125,"liquidated":false},{"symbol":"ETHUSDT","price":4187.5,"pnlUsd":-2962.5,"equityUsd":237.5,"liquidated":false},{"symbol":"BTCUSD","price":115000,"pnlUsd":1787.2340425531927,"equityUsd":6680.850892553192,"liquidated":false},{"symbol":"ETHUSD","price":4187.5,"pnlUsd":1864.7540983606557,"equityUsd":5297.131142735656,"liquidated":false}]},{"move":0.26,"pnlUsd":5592.010776071162,"equityUsd":22577.80589157116,"capitalLossPct":-0.32921689788712327,"legs":[{"symbol":"BTCUSDT","price":115920,"pnlUsd":3138,"equityUsd":10263,"liquidated":false},{"symbol":"ETHUSDT","price":4221,"pnlUsd":-3063,"equityUsd":137,"liquidated":false},{"symbol":"BTCUSD","price":115920,"pnlUsd":1865.5319148936173,"equityUsd":6798.297699693618,"liquidated":false},{"symbol":"ETHUSD","price":4221,"pnlUsd":1919.6721311475408,"equityUsd":5379.508191877541,"liquidated":false}]},{"move":0.27,"pnlUsd":5792.8346323534715,"equityUsd":22778.62974785347,"capitalLossPct":-0.34103994502249435,"legs":[{"symbol":"BTCUSDT","price":116840,"pnlUsd":3276,"equityUsd":10401,"liquidated":false},{"symbol":"ETHUSDT","price":4254.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":116840,"pnlUsd":1943.8297872340427,"equityUsd":6915.744506834042,"liquidated":false},{"symbol":"ETHUSD","price":4254.5,"pnlUsd":1974.5901639344263,"equityUsd":5461.885241019427,"liquidated":false}]},{"move":0.28,"pnlUsd":6130.658488635781,"equityUsd":23116.45360413578,"capitalLossPct":-0.3609285551220025,"legs":[{"symbol":"BTCUSDT","price":117760,"pnlUsd":3414,"equityUsd":10539,"liquidated":false},{"symbol":"ETHUSDT","price":4288,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":117760,"pnlUsd":2022.1276595744687,"equityUsd":7033.191313974468,"liquidated":false},{"symbol":"ETHUSD","price":4288,"pnlUsd":2029.5081967213116,"equityUsd":5544.262290161312,"liquidated":false}]},{"move":0.29,"pnlUsd":6468.482344918091,"equityUsd":23454.27746041809,"capitalLossPct":-0.38081716522151066,"legs":[{"symbol":"BTCUSDT","price":118680,"pnlUsd":3552,"equityUsd":10677,"liquidated":false},{"symbol":"ETHUSDT","price":4321.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":118680,"pnlUsd":2100.4255319148933,"equityUsd":7150.638121114893,"liquidated":false},{"symbol":"ETHUSD","price":4321.5,"pnlUsd":2084.4262295081967,"equityUsd":5626.639339303197,"liquidated":false}]},{"move":0.3,"pnlUsd":6806.306201200401,"equityUsd":23792.1013167004,"capitalLossPct":-0.4007057753210188,"legs":[{"symbol":"BTCUSDT","price":119600,"pnlUsd":3690,"equityUsd":10815,"liquidated":false},{"symbol":"ETHUSDT","price":4355,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":119600,"pnlUsd":2178.7234042553196,"equityUsd":7268.084928255319,"liquidated":false},{"symbol":"ETHUSD","price":4355,"pnlUsd":2139.344262295082,"equityUsd":5709.016388445082,"liquidated":false}]},{"move":0.31,"pnlUsd":7144.130057482715,"equityUsd":24129.925172982712,"capitalLossPct":-0.4205943854205272,"legs":[{"symbol":"BTCUSDT","price":120520,"pnlUsd":3828,"equityUsd":10953,"liquidated":false},{"symbol":"ETHUSDT","price":4388.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":120520,"pnlUsd":2257.0212765957453,"equityUsd":7385.531735395745,"liquidated":false},{"symbol":"ETHUSD","price":4388.5,"pnlUsd":2194.2622950819673,"equityUsd":5791.393437586968,"liquidated":false}]},{"move":0.32,"pnlUsd":7481.9539137650245,"equityUsd":24467.74902926502,"capitalLossPct":-0.44048299552003534,"legs":[{"symbol":"BTCUSDT","price":121440,"pnlUsd":3966,"equityUsd":11091,"liquidated":false},{"symbol":"ETHUSDT","price":4422,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":121440,"pnlUsd":2335.3191489361716,"equityUsd":7502.9785425361715,"liquidated":false},{"symbol":"ETHUSD","price":4422,"pnlUsd":2249.180327868852,"equityUsd":5873.770486728852,"liquidated":false}]},{"move":0.33,"pnlUsd":7819.777770047338,"equityUsd":24805.572885547335,"capitalLossPct":-0.4603716056195437,"legs":[{"symbol":"BTCUSDT","price":122360,"pnlUsd":4104,"equityUsd":11229,"liquidated":false},{"symbol":"ETHUSDT","price":4455.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":122360,"pnlUsd":2413.617021276597,"equityUsd":7620.425349676596,"liquidated":false},{"symbol":"ETHUSD","price":4455.5,"pnlUsd":2304.0983606557375,"equityUsd":5956.147535870738,"liquidated":false}]},{"move":0.34,"pnlUsd":8157.601626329648,"equityUsd":25143.396741829645,"capitalLossPct":-0.48026021571905186,"legs":[{"symbol":"BTCUSDT","price":123280.00000000001,"pnlUsd":4242.000000000002,"equityUsd":11367.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":4489,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":123280.00000000001,"pnlUsd":2491.9148936170227,"equityUsd":7737.872156817022,"liquidated":false},{"symbol":"ETHUSD","price":4489,"pnlUsd":2359.0163934426228,"equityUsd":6038.524585012623,"liquidated":false}]},{"move":0.35,"pnlUsd":8495.425482611958,"equityUsd":25481.220598111955,"capitalLossPct":-0.5001488258185602,"legs":[{"symbol":"BTCUSDT","price":124200.00000000001,"pnlUsd":4380.000000000002,"equityUsd":11505.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":4522.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":124200.00000000001,"pnlUsd":2570.2127659574485,"equityUsd":7855.318963957448,"liquidated":false},{"symbol":"ETHUSD","price":4522.5,"pnlUsd":2413.934426229508,"equityUsd":6120.901634154508,"liquidated":false}]},{"move":0.36,"pnlUsd":8833.249338894264,"equityUsd":25819.04445439426,"capitalLossPct":-0.5200374359180682,"legs":[{"symbol":"BTCUSDT","price":125119.99999999999,"pnlUsd":4517.999999999997,"equityUsd":11642.999999999996,"liquidated":false},{"symbol":"ETHUSDT","price":4556,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":125119.99999999999,"pnlUsd":2648.5106382978715,"equityUsd":7972.765771097871,"liquidated":false},{"symbol":"ETHUSD","price":4556,"pnlUsd":2468.8524590163934,"equityUsd":6203.278683296394,"liquidated":false}]},{"move":0.37,"pnlUsd":9171.073195176581,"equityUsd":26156.86831067658,"capitalLossPct":-0.5399260460175768,"legs":[{"symbol":"BTCUSDT","price":126040.00000000001,"pnlUsd":4656.000000000002,"equityUsd":11781.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":4589.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":126040.00000000001,"pnlUsd":2726.808510638299,"equityUsd":8090.212578238299,"liquidated":false},{"symbol":"ETHUSD","price":4589.5,"pnlUsd":2523.770491803278,"equityUsd":6285.655732438278,"liquidated":false}]},{"move":0.38,"pnlUsd":9508.897051458887,"equityUsd":26494.692166958885,"capitalLossPct":-0.5598146561170847,"legs":[{"symbol":"BTCUSDT","price":126959.99999999999,"pnlUsd":4793.999999999997,"equityUsd":11918.999999999996,"liquidated":false},{"symbol":"ETHUSDT","price":4623,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":126959.99999999999,"pnlUsd":2805.106382978722,"equityUsd":8207.659385378722,"liquidated":false},{"symbol":"ETHUSD","price":4623,"pnlUsd":2578.6885245901635,"equityUsd":6368.032781580164,"liquidated":false}]},{"move":0.39,"pnlUsd":9846.720907741204,"equityUsd":26832.5160232412,"capitalLossPct":-0.5797032662165933,"legs":[{"symbol":"BTCUSDT","price":127880.00000000001,"pnlUsd":4932.000000000002,"equityUsd":12057.000000000002,"liquidated":false},{"symbol":"ETHUSDT","price":4656.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":127880.00000000001,"pnlUsd":2883.4042553191503,"equityUsd":8325.10619251915,"liquidated":false},{"symbol":"ETHUSD","price":4656.5,"pnlUsd":2633.6065573770497,"equityUsd":6450.40983072205,"liquidated":false}]},{"move":0.4,"pnlUsd":10184.544764023507,"equityUsd":27170.339879523504,"capitalLossPct":-0.599591876316101,"legs":[{"symbol":"BTCUSDT","price":128799.99999999999,"pnlUsd":5069.999999999997,"equityUsd":12194.999999999996,"liquidated":false},{"symbol":"ETHUSDT","price":4690,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":128799.99999999999,"pnlUsd":2961.702127659574,"equityUsd":8442.552999659572,"liquidated":false},{"symbol":"ETHUSD","price":4690,"pnlUsd":2688.5245901639346,"equityUsd":6532.786879863935,"liquidated":false}]},{"move":0.41,"pnlUsd":10522.368620305817,"equityUsd":27508.163735805814,"capitalLossPct":-0.6194804864156092,"legs":[{"symbol":"BTCUSDT","price":129719.99999999999,"pnlUsd":5207.999999999997,"equityUsd":12332.999999999996,"liquidated":false},{"symbol":"ETHUSDT","price":4723.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":129719.99999999999,"pnlUsd":3039.9999999999995,"equityUsd":8559.999806799999,"liquidated":false},{"symbol":"ETHUSD","price":4723.5,"pnlUsd":2743.44262295082,"equityUsd":6615.16392900582,"liquidated":false}]},{"move":0.42,"pnlUsd":10860.192476588134,"equityUsd":27845.98759208813,"capitalLossPct":-0.6393690965151178,"legs":[{"symbol":"BTCUSDT","price":130640,"pnlUsd":5346,"equityUsd":12471,"liquidated":false},{"symbol":"ETHUSDT","price":4757,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":130640,"pnlUsd":3118.2978723404267,"equityUsd":8677.446613940427,"liquidated":false},{"symbol":"ETHUSD","price":4757,"pnlUsd":2798.3606557377043,"equityUsd":6697.540978147705,"liquidated":false}]},{"move":0.43,"pnlUsd":11198.016332870444,"equityUsd":28183.81144837044,"capitalLossPct":-0.6592577066146259,"legs":[{"symbol":"BTCUSDT","price":131560,"pnlUsd":5484,"equityUsd":12609,"liquidated":false},{"symbol":"ETHUSDT","price":4790.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":131560,"pnlUsd":3196.595744680852,"equityUsd":8794.893421080851,"liquidated":false},{"symbol":"ETHUSD","price":4790.5,"pnlUsd":2853.27868852459,"equityUsd":6779.91802728959,"liquidated":false}]},{"move":0.44,"pnlUsd":11535.840189152754,"equityUsd":28521.63530465275,"capitalLossPct":-0.6791463167141341,"legs":[{"symbol":"BTCUSDT","price":132480,"pnlUsd":5622,"equityUsd":12747,"liquidated":false},{"symbol":"ETHUSDT","price":4824,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":132480,"pnlUsd":3274.8936170212774,"equityUsd":8912.340228221277,"liquidated":false},{"symbol":"ETHUSD","price":4824,"pnlUsd":2908.1967213114754,"equityUsd":6862.2950764314755,"liquidated":false}]},{"move":0.45,"pnlUsd":11873.664045435067,"equityUsd":28859.459160935065,"capitalLossPct":-0.6990349268136424,"legs":[{"symbol":"BTCUSDT","price":133400,"pnlUsd":5760,"equityUsd":12885,"liquidated":false},{"symbol":"ETHUSDT","price":4857.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":133400,"pnlUsd":3353.1914893617027,"equityUsd":9029.787035361702,"liquidated":false},{"symbol":"ETHUSD","price":4857.5,"pnlUsd":2963.1147540983607,"equityUsd":6944.672125573361,"liquidated":false}]},{"move":0.46,"pnlUsd":12211.48790171738,"equityUsd":29197.283017217378,"capitalLossPct":-0.7189235369131508,"legs":[{"symbol":"BTCUSDT","price":134320,"pnlUsd":5898,"equityUsd":13023,"liquidated":false},{"symbol":"ETHUSDT","price":4891,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":134320,"pnlUsd":3431.4893617021285,"equityUsd":9147.233842502128,"liquidated":false},{"symbol":"ETHUSD","price":4891,"pnlUsd":3018.0327868852455,"equityUsd":7027.049174715246,"liquidated":false}]},{"move":0.47,"pnlUsd":12549.311757999687,"equityUsd":29535.106873499684,"capitalLossPct":-0.738812147012659,"legs":[{"symbol":"BTCUSDT","price":135240,"pnlUsd":6036,"equityUsd":13161,"liquidated":false},{"symbol":"ETHUSDT","price":4924.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":135240,"pnlUsd":3509.787234042554,"equityUsd":9264.680649642552,"liquidated":false},{"symbol":"ETHUSD","price":4924.5,"pnlUsd":3072.9508196721313,"equityUsd":7109.426223857132,"liquidated":false}]},{"move":0.48,"pnlUsd":12887.135614282,"equityUsd":29872.930729781998,"capitalLossPct":-0.7587007571121673,"legs":[{"symbol":"BTCUSDT","price":136160,"pnlUsd":6174,"equityUsd":13299,"liquidated":false},{"symbol":"ETHUSDT","price":4958,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":136160,"pnlUsd":3588.0851063829796,"equityUsd":9382.127456782979,"liquidated":false},{"symbol":"ETHUSD","price":4958,"pnlUsd":3127.8688524590166,"equityUsd":7191.803272999017,"liquidated":false}]},{"move":0.49,"pnlUsd":13224.95947056431,"equityUsd":30210.754586064308,"capitalLossPct":-0.7785893672116755,"legs":[{"symbol":"BTCUSDT","price":137080,"pnlUsd":6312,"equityUsd":13437,"liquidated":false},{"symbol":"ETHUSDT","price":4991.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":137080,"pnlUsd":3666.382978723405,"equityUsd":9499.574263923405,"liquidated":false},{"symbol":"ETHUSD","price":4991.5,"pnlUsd":3182.786885245902,"equityUsd":7274.180322140903,"liquidated":false}]},{"move":0.5,"pnlUsd":13562.78332684662,"equityUsd":30548.578442346618,"capitalLossPct":-0.7984779773111836,"legs":[{"symbol":"BTCUSDT","price":138000,"pnlUsd":6450,"equityUsd":13575,"liquidated":false},{"symbol":"ETHUSDT","price":5025,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":138000,"pnlUsd":3744.6808510638307,"equityUsd":9617.021071063831,"liquidated":false},{"symbol":"ETHUSD","price":5025,"pnlUsd":3237.704918032787,"equityUsd":7356.557371282788,"liquidated":false}]},{"move":0.51,"pnlUsd":13900.60718312893,"equityUsd":30886.402298628927,"capitalLossPct":-0.8183665874106918,"legs":[{"symbol":"BTCUSDT","price":138920,"pnlUsd":6588,"equityUsd":13713,"liquidated":false},{"symbol":"ETHUSDT","price":5058.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":138920,"pnlUsd":3822.9787234042556,"equityUsd":9734.467878204256,"liquidated":false},{"symbol":"ETHUSD","price":5058.5,"pnlUsd":3292.622950819672,"equityUsd":7438.934420424673,"liquidated":false}]},{"move":0.52,"pnlUsd":14238.43103941124,"equityUsd":31224.226154911237,"capitalLossPct":-0.8382551975102,"legs":[{"symbol":"BTCUSDT","price":139840,"pnlUsd":6726,"equityUsd":13851,"liquidated":false},{"symbol":"ETHUSDT","price":5092,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":139840,"pnlUsd":3901.276595744681,"equityUsd":9851.91468534468,"liquidated":false},{"symbol":"ETHUSD","price":5092,"pnlUsd":3347.5409836065573,"equityUsd":7521.311469566557,"liquidated":false}]},{"move":0.53,"pnlUsd":14576.25489569355,"equityUsd":31562.050011193547,"capitalLossPct":-0.8581438076097081,"legs":[{"symbol":"BTCUSDT","price":140760,"pnlUsd":6864,"equityUsd":13989,"liquidated":false},{"symbol":"ETHUSDT","price":5125.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":140760,"pnlUsd":3979.5744680851067,"equityUsd":9969.361492485106,"liquidated":false},{"symbol":"ETHUSD","price":5125.5,"pnlUsd":3402.459016393442,"equityUsd":7603.688518708443,"liquidated":false}]},{"move":0.54,"pnlUsd":14914.078751975863,"equityUsd":31899.87386747586,"capitalLossPct":-0.8780324177092165,"legs":[{"symbol":"BTCUSDT","price":141680,"pnlUsd":7002,"equityUsd":14127,"liquidated":false},{"symbol":"ETHUSDT","price":5159,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":141680,"pnlUsd":4057.8723404255325,"equityUsd":10086.808299625533,"liquidated":false},{"symbol":"ETHUSD","price":5159,"pnlUsd":3457.3770491803284,"equityUsd":7686.065567850328,"liquidated":false}]},{"move":0.55,"pnlUsd":15251.902608258177,"equityUsd":32237.697723758174,"capitalLossPct":-0.8979210278087248,"legs":[{"symbol":"BTCUSDT","price":142600,"pnlUsd":7140,"equityUsd":14265,"liquidated":false},{"symbol":"ETHUSDT","price":5192.5,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":142600,"pnlUsd":4136.170212765958,"equityUsd":10204.255106765959,"liquidated":false},{"symbol":"ETHUSD","price":5192.5,"pnlUsd":3512.2950819672133,"equityUsd":7768.4426169922135,"liquidated":false}]},{"move":0.56,"pnlUsd":15589.726464540487,"equityUsd":32575.521580040484,"capitalLossPct":-0.917809637908233,"legs":[{"symbol":"BTCUSDT","price":143520,"pnlUsd":7278,"equityUsd":14403,"liquidated":false},{"symbol":"ETHUSDT","price":5226,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":143520,"pnlUsd":4214.468085106383,"equityUsd":10321.701913906383,"liquidated":false},{"symbol":"ETHUSD","price":5226,"pnlUsd":3567.2131147540986,"equityUsd":7850.819666134099,"liquidated":false}]},{"move":0.57,"pnlUsd":15927.550320822782,"equityUsd":32913.34543632278,"capitalLossPct":-0.9376982480077405,"legs":[{"symbol":"BTCUSDT","price":144439.99999999997,"pnlUsd":7415.999999999995,"equityUsd":14540.999999999996,"liquidated":false},{"symbol":"ETHUSDT","price":5259.499999999999,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":144439.99999999997,"pnlUsd":4292.765957446806,"equityUsd":10439.148721046804,"liquidated":false},{"symbol":"ETHUSD","price":5259.499999999999,"pnlUsd":3622.131147540982,"equityUsd":7933.196715275982,"liquidated":false}]},{"move":0.58,"pnlUsd":16265.374177105106,"equityUsd":33251.169292605104,"capitalLossPct":-0.9575868581072495,"legs":[{"symbol":"BTCUSDT","price":145360,"pnlUsd":7554,"equityUsd":14679,"liquidated":false},{"symbol":"ETHUSDT","price":5293,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":145360,"pnlUsd":4371.063829787235,"equityUsd":10556.595528187234,"liquidated":false},{"symbol":"ETHUSD","price":5293,"pnlUsd":3677.0491803278683,"equityUsd":8015.573764417869,"liquidated":false}]},{"move":0.59,"pnlUsd":16603.198033387416,"equityUsd":33588.99314888741,"capitalLossPct":-0.9774754682067577,"legs":[{"symbol":"BTCUSDT","price":146280,"pnlUsd":7692,"equityUsd":14817,"liquidated":false},{"symbol":"ETHUSDT","price":5326.499999999999,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":146280,"pnlUsd":4449.3617021276605,"equityUsd":10674.04233532766,"liquidated":false},{"symbol":"ETHUSD","price":5326.499999999999,"pnlUsd":3731.967213114752,"equityUsd":8097.950813559752,"liquidated":false}]},{"move":0.6,"pnlUsd":16941.021889669726,"equityUsd":33926.81700516972,"capitalLossPct":-0.9973640783062658,"legs":[{"symbol":"BTCUSDT","price":147200,"pnlUsd":7830,"equityUsd":14955,"liquidated":false},{"symbol":"ETHUSDT","price":5360,"pnlUsd":-3200,"equityUsd":0,"liquidated":true},{"symbol":"BTCUSD","price":147200,"pnlUsd":4527.659574468085,"equityUsd":10791.489142468086,"liquidated":false},{"symbol":"ETHUSD","price":5360,"pnlUsd":3786.8852459016393,"equityUsd":8180.327862701639,"liquidated":false}]}],"diagnostics":[{"severity":"warning","symbol":"BTCUSDT","code":"liq_derivada","message":"liqPrice ausente na resposta; calculado 47738.69 com taxa de manutenção 0.500%."},{"severity":"warning","symbol":"ETHUSDT","code":"liq_derivada","message":"liqPrice ausente na resposta; calculado 4245.44 com taxa de manutenção 0.500%."},{"severity":"warning","symbol":"BTCUSD","code":"liq_derivada","message":"liqPrice ausente na resposta; calculado 62980.00 com taxa de manutenção 0.500%."},{"severity":"warning","symbol":"ETHUSD","code":"liq_derivada","message":"liqPrice ausente na resposta; calculado 2043.50 com taxa de manutenção 0.500%."}]}</script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById('payload').textContent);
+  const $ = (id) => document.getElementById(id);
+
+  // --- estado da interface (preferências por visitante, não dados) ---
+  const prefs = { eur: false, hide: false, theme: null };
+  try {
+    const saved = JSON.parse(localStorage.getItem('wt-prefs') || '{}');
+    Object.assign(prefs, saved);
+  } catch { /* armazenamento indisponível: seguimos com os valores por omissão */ }
+  const save = () => {
+    try { localStorage.setItem('wt-prefs', JSON.stringify(prefs)); } catch { /* idem */ }
+  };
+
+  // --- formatação ---
+  const rate = () => (prefs.eur ? D.eurPerUsd : 1);
+  const cur = () => (prefs.eur ? '€' : '$');
+  // Cada moeda escrita na sua convenção: $16,986.40 e 15.627,49 €.
+  const loc = () => (prefs.eur ? 'pt-PT' : 'en-US');
+  function money(usd, digits = 0) {
+    if (prefs.hide) return '••••';
+    const v = usd * rate();
+    const s = Math.abs(v).toLocaleString(loc(), {
+      minimumFractionDigits: digits, maximumFractionDigits: digits,
+    });
+    return (v < 0 ? '−' : '') + (prefs.eur ? s + ' €' : '$' + s);
+  }
+  // As percentagens continuam visíveis em modo privado: não revelam património
+  // e sem elas a ferramenta deixava de servir para nada em público.
+  const pc = (f, d = 1) => (f >= 0 ? '+' : '−') + (Math.abs(f) * 100).toFixed(d) + '%';
+  const px = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const cls = (n) => (n < 0 ? 'down' : 'up');
+
+  /** Estado de risco pela folga até à liquidação. Nunca só cor: vem com rótulo. */
+  function risk(move) {
+    if (move === null) return { k: 'good', icon: '✓', label: 'sem liquidação' };
+    const a = Math.abs(move);
+    if (a < 0.2) return { k: 'crit', icon: '▲', label: 'crítico' };
+    if (a < 0.35) return { k: 'warn', icon: '▲', label: 'atenção' };
+    return { k: 'good', icon: '✓', label: 'confortável' };
+  }
+
+  const at = (i) => D.scenarios[Math.round(i) + 60];
+  const today = at(0);
+
+  // --- Estado ---
+  function renderEstado() {
+    const f = D.frontier;
+    if (f.down) {
+      const sc = at(Math.round(f.down.move * 100));
+      $('v-move').textContent = pc(f.down.move);
+      $('v-lead').innerHTML =
+        `A primeira liquidação é <b>${f.down.symbol}</b>. Nesse ponto perdes ` +
+        `<b>${(sc.capitalLossPct * 100).toFixed(0)}%</b> do capital.`;
+      $('v-down').innerHTML = `${pc(f.down.move)} <span style="color:var(--muted)">· ${f.down.symbol}</span>`;
+    }
+    $('v-up').innerHTML = f.up
+      ? `${pc(f.up.move)} <span style="color:var(--muted)">· ${f.up.symbol}</span>`
+      : 'nenhuma';
+
+    $('s-cap').textContent = money(D.baseCapitalUsd);
+    const pnl = today.pnlUsd;
+    $('s-pnl').textContent = money(pnl, 2);
+    $('s-pnl').className = 'val ' + cls(pnl);
+    $('s-pnl-pct').textContent = pc(pnl / D.baseCapitalUsd) + ' do capital';
+    $('s-eq').textContent = money(today.equityUsd);
+
+    const SPAN = 0.6;
+    const atMove = (m) => Math.max(0, Math.min(100, ((m + SPAN) / (2 * SPAN)) * 100));
+
+    $('positions').innerHTML = D.positions.map((p) => {
+      const r = risk(p.liqMove);
+      const long = p.side === 'long';
+      const lp = p.liqMove === null ? null : atMove(p.liqMove);
+      const offscale = p.liqMove !== null && Math.abs(p.liqMove) > SPAN;
+      const zone = lp === null ? '' :
+        `<div class="danger ${r.k}" style="${long ? 'left:0;width:' + lp + '%' : 'right:0;width:' + (100 - lp) + '%'}"></div>` +
+        (offscale ? '' : `<div class="edge ${r.k}" style="left:calc(${lp}% - 1px)"></div>`);
+      return `<div class="pos">
+        <div class="pos-head">
+          <span class="sym">${p.symbol}</span>
+          <span class="tag">${p.category}</span>
+          <span class="tag">${long ? 'long' : 'short'} ${p.leverage}x</span>
+          <span class="chip ${r.k}"><i>${r.icon}</i>${r.label}</span>
+          <span class="pos-pnl ${cls(p.pnlUsd)}">${money(p.pnlUsd, 2)}</span>
+        </div>
+        <div class="runway">
+          <div class="track">${zone}
+            <div class="mid" title="hoje"></div>
+            <div class="entry" style="left:calc(${atMove(p.entryPrice / p.markPrice - 1)}% - 1px)" title="entrada"></div>
+            <div class="here ${r.k}" style="left:50%" title="preço atual"></div>
+          </div>
+          <div class="scale"><span>−60%</span><span>hoje</span><span>+60%</span></div>
+          <div class="runway-legend">
+            <span>entrada <b>${px(p.entryPrice)}</b></span>
+            <span>agora <b>${px(p.markPrice)}</b></span>
+            <span>liquidação <b>${p.liqPrice === null ? 'nunca' : px(p.liqPrice)}</b></span>
+            <span>até lá <b class="${r.k === 'good' ? 'up' : 'down'}">${p.liqMove === null ? '—' : pc(p.liqMove)}</b></span>
+            <span>efetiva <b>${p.effectiveLeverage === null ? '—' : p.effectiveLeverage.toFixed(2) + 'x'}</b></span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    $('funding').innerHTML = D.positions.map((p) => `<tr>
+      <td>${p.symbol}</td>
+      <td>${(p.fundingRate * 100).toFixed(4)}%</td>
+      <td class="${cls(p.fundingPaidUsd)}">${money(p.fundingPaidUsd, 2)}</td>
+      <td class="${cls(p.funding30dUsd)}">${money(p.funding30dUsd, 2)}</td></tr>`).join('');
+
+    $('diag').innerHTML = D.diagnostics.length
+      ? D.diagnostics.map((d) =>
+          `<div><b>${d.symbol}</b> <code>${d.code}</code><br>${d.message}</div>`).join('')
+      : '<div>Nada a assinalar.</div>';
+  }
+
+  // --- gráfico ---
+  const W = 720, H = 300, PL = 46, PR = 22, PT = 18, PB = 38;
+  const xOf = (m) => PL + ((m + 0.6) / 1.2) * (W - PL - PR);
+  const maxY = 1.7;
+  const yOf = (v) => PT + (1 - v / maxY) * (H - PT - PB);
+
+  function renderChart(sel) {
+    const pts = D.scenarios.map((s) => [xOf(s.move), yOf(1 - s.capitalLossPct)]);
+    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    const area = `${line} L${xOf(0.6).toFixed(1)} ${yOf(0).toFixed(1)} L${xOf(-0.6).toFixed(1)} ${yOf(0).toFixed(1)} Z`;
+
+    // Marcas de liquidação: uma por posição, na direção em que morre.
+    const marks = D.positions
+      .filter((p) => p.liqMove !== null && Math.abs(p.liqMove) <= 0.6)
+      .sort((a, b) => a.liqMove - b.liqMove)
+      .map((p, i) => {
+        const x = xOf(p.liqMove);
+        const ly = PT + 9 + (i % 3) * 12;
+        const flip = x > W - 130;
+        return `<line x1="${x.toFixed(1)}" y1="${yOf(0)}" x2="${x.toFixed(1)}" y2="${ly + 4}"
+                  stroke="var(--crit-mark)" stroke-width="1.5" stroke-dasharray="3 3" fill="none"/>
+                <text class="liq-lbl" x="${(x + (flip ? -5 : 5)).toFixed(1)}" y="${ly}"
+                  text-anchor="${flip ? 'end' : 'start'}">${p.symbol} ${pc(p.liqMove, 0)}</text>`;
+      }).join('');
+
+    const yTicks = [0, 0.5, 1, 1.5].map((v) =>
+      `<line x1="${PL}" y1="${yOf(v).toFixed(1)}" x2="${W - PR}" y2="${yOf(v).toFixed(1)}"
+         stroke="${v === 1 ? 'var(--border-firm)' : 'var(--grid)'}" stroke-width="1" fill="none"/>
+       <text class="axis-txt${v === 1 ? ' strong' : ''}" x="${PL - 8}" y="${(yOf(v) + 3.5).toFixed(1)}"
+         text-anchor="end">${(v * 100).toFixed(0)}%</text>`).join('');
+
+    const xTicks = [-0.6, -0.3, 0, 0.3, 0.6].map((m) =>
+      `<text class="axis-txt${m === 0 ? ' strong' : ''}" x="${xOf(m).toFixed(1)}" y="${H - PB + 17}"
+         text-anchor="middle">${m === 0 ? 'hoje' : pc(m, 0)}</text>`).join('');
+
+    const s = at(sel);
+    const cx = xOf(s.move), cy = yOf(1 - s.capitalLossPct);
+
+    $('chart').innerHTML = `
+      ${yTicks}
+      <path d="${area}" fill="var(--series-soft)" stroke="none"/>
+      <path d="${line}" fill="none" stroke="var(--series)" stroke-width="2"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      ${marks}
+      <line x1="${xOf(0)}" y1="${PT}" x2="${xOf(0)}" y2="${yOf(0)}"
+            stroke="var(--border-firm)" stroke-width="1" fill="none"/>
+      <line x1="${cx.toFixed(1)}" y1="${PT}" x2="${cx.toFixed(1)}" y2="${yOf(0)}"
+            stroke="var(--series)" stroke-width="1" fill="none"/>
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5.5" fill="var(--series)"
+              stroke="var(--surface)" stroke-width="2"/>
+      ${xTicks}`;
+  }
+
+  // --- cenário selecionado ---
+  function renderScenario(sel) {
+    const s = at(sel);
+    $('d-move').textContent = pc(s.move, 0);
+    $('d-move').className = 'dock-move' + (s.move === 0 ? '' : s.move < 0 ? ' down' : ' up');
+    const liq = s.legs.filter((l) => l.liquidated);
+    $('d-sum').innerHTML =
+      `Equity <b>${money(s.equityUsd)}</b> · ` +
+      `<span class="${cls(s.pnlUsd)}">${money(s.pnlUsd)}</span> · ` +
+      `capital <b class="${s.capitalLossPct > 0 ? 'down' : 'up'}">${pc(-s.capitalLossPct, 0)}</b>` +
+      (liq.length ? ` · <b class="down">${liq.length} liquidada(s): ${liq.map((l) => l.symbol).join(', ')}</b>` : '');
+
+    $('legs').innerHTML = s.legs.map((l) => `<tr>
+      <td>${l.symbol}</td>
+      <td>${px(l.price)}</td>
+      <td class="${cls(l.pnlUsd)}">${money(l.pnlUsd, 2)}</td>
+      <td>${money(l.equityUsd)}</td>
+      <td>${l.liquidated
+        ? '<span class="chip crit"><i>▲</i>liquidada</span>'
+        : '<span class="chip good"><i>✓</i>viva</span>'}</td></tr>`).join('');
+    renderChart(sel);
+  }
+
+  // --- presets: valores reais do motor, não números inventados ---
+  const presets = [];
+  if (D.frontier.down) presets.push(['Fronteira ↓', Math.round(D.frontier.down.move * 100)]);
+  presets.push(['−30%', -30], ['−10%', -10], ['Hoje', 0], ['+10%', 10]);
+  if (D.frontier.up) presets.push(['Fronteira ↑', Math.round(D.frontier.up.move * 100)]);
+  $('presets').innerHTML = presets
+    .map(([l, v]) => `<button type="button" data-v="${v}">${l}</button>`).join('');
+  $('presets').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    $('slider').value = b.dataset.v;
+    renderScenario(+b.dataset.v);
+  });
+  $('slider').addEventListener('input', (e) => renderScenario(+e.target.value));
+
+  // --- separadores ---
+  for (const [tab, pane, other, otherPane] of [
+    ['tab-estado', 'pane-estado', 'tab-cenarios', 'pane-cenarios'],
+    ['tab-cenarios', 'pane-cenarios', 'tab-estado', 'pane-estado'],
+  ]) {
+    $(tab).addEventListener('click', () => {
+      $(tab).setAttribute('aria-selected', 'true');
+      $(other).setAttribute('aria-selected', 'false');
+      $(pane).hidden = false;
+      $(otherPane).hidden = true;
+    });
+  }
+
+  // --- toggles ---
+  function applyTheme() {
+    if (prefs.theme) document.documentElement.setAttribute('data-theme', prefs.theme);
+    else document.documentElement.removeAttribute('data-theme');
+    $('t-theme').setAttribute('aria-pressed', String(!!prefs.theme));
+  }
+  $('t-theme').addEventListener('click', () => {
+    const dark = prefs.theme
+      ? prefs.theme === 'dark'
+      : matchMedia('(prefers-color-scheme: dark)').matches;
+    prefs.theme = dark ? 'light' : 'dark';
+    applyTheme(); save(); redraw();
+  });
+  $('t-cur').addEventListener('click', () => {
+    prefs.eur = !prefs.eur;
+    $('t-cur').textContent = prefs.eur ? 'EUR' : 'USD';
+    $('t-cur').setAttribute('aria-pressed', String(prefs.eur));
+    save(); redraw();
+  });
+  $('t-hide').addEventListener('click', () => {
+    prefs.hide = !prefs.hide;
+    $('t-hide').setAttribute('aria-pressed', String(prefs.hide));
+    save(); redraw();
+  });
+
+  const redraw = () => { renderEstado(); renderScenario(+$('slider').value); };
+
+  $('t-cur').textContent = prefs.eur ? 'EUR' : 'USD';
+  $('t-cur').setAttribute('aria-pressed', String(prefs.eur));
+  $('t-hide').setAttribute('aria-pressed', String(prefs.hide));
+  applyTheme();
+  redraw();
+})();
+</script>
