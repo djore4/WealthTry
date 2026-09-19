@@ -1,0 +1,14 @@
+{
+  "name": "wealthtry",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/engine/*.test.ts",
+    "probe": "node scripts/probe-bybit.mjs",
+    "probe:safe": "node scripts/probe-bybit.mjs --redact --out probe-output.json"
+  }
+}
