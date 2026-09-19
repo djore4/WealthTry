@@ -87,8 +87,24 @@ estás a negociar, por isso desvaloriza ao mesmo tempo que a posição perde:
 > Uma **inverse long a 1x liquida a −50%.**
 > Mesmo número no ecrã da Bybit, risco a dobrar.
 
-Daí o indicador **alavancagem efetiva** = `1 / |movimento até à liquidação|`.
-É este número, e não o da exchange, que descreve o risco real.
+Daí o indicador **alavancagem efetiva** = `1 / |movimento até à liquidação|`,
+**medido a partir do preço de hoje, não da entrada** — é o risco que corres a
+partir de agora, que é a pergunta relevante.
+
+Movimento de preço até à liquidação, sem margem de manutenção
+(verificado em `src/bybit/normalize.test.ts`):
+
+| Alavancagem | linear | inverse |
+|---|---|---|
+| 1x long | nunca (exigiria preço zero) | **−50%** |
+| 1x short | +100% | **nunca** |
+| 2x long | −50% | **−33%** |
+| 2x short | +50% | **+100%** |
+
+A leitura que interessa: **inverse long é sempre pior que linear; inverse short
+é sempre melhor.** Nenhuma destas assimetrias aparece no número de alavancagem
+que a exchange mostra. Quem corre as duas categorias ao mesmo tempo, como nós,
+tem duas escalas de risco diferentes a chamarem-se "2x".
 
 ### Pressuposto de correlação
 
@@ -96,6 +112,44 @@ O slider mestre move todos os ativos na mesma percentagem. Cripto é altamente
 correlacionada, por isso é o caso de stress honesto — mas **é um pressuposto, e
 vai estar escrito no ecrã**, com override por ativo. Uma ferramenta que esconde
 os seus pressupostos é perigosa.
+
+## Achados que vieram de construir (não de planear)
+
+**O funding não está no objeto de posição.** `curRealisedPnl` é PnL realizado
+com taxas de negociação, não funding. O indicador obrigatório "funding
+pago/recebido desde a abertura" exige agregar o registo de transações
+(`/v5/account/transaction-log`, `type=SETTLEMENT`) — outro endpoint, outra
+paginação, outra janela temporal. Custo real que o plano inicial não previa.
+
+**Somar o PnL de cada posição num cenário produz números absurdos.** Uma
+posição liquidada deixa de ter PnL, e o total "melhorava" quando o mercado
+piorava: −5.700 USD a −30% e −2.400 USD a −40%. A definição correta de PnL de
+cenário é `equity do cenário − capital de hoje`, que é monótona e inclui
+automaticamente a desvalorização do colateral das inverse. Está fechado com um
+teste de propriedade em `src/engine/scenario.test.ts`.
+
+Nenhum dos dois apareceu ao desenhar. Apareceram ao executar.
+
+## Como se constrói sem a conta ligada
+
+A camada de dados é uma interface `DataSource` com duas implementações:
+
+- `FixtureSource` — portefólio sintético que replica a configuração real
+  (2 linear + 2 inverse, isolada, alavancagem baixa).
+- `BybitSource` — a API real.
+
+**Ambas passam pelo mesmo normalizador.** As fixtures são `RawPosition`, tal
+como a API as devolve, e o `liqPrice` é *calculado* em vez de escrito à mão —
+por isso não podem ficar internamente inconsistentes, e o caminho exercitado
+com dados sintéticos é o mesmo que corre em produção.
+
+Consequência prática: **a aplicação inteira é construível e verificável sem
+tocar na conta.** Não é um andaime temporário; é o que permite testar a UI
+contra cenários extremos que a conta real não tem.
+
+O diagnóstico substitui o script de sondagem manual: `PortfolioSnapshot` traz
+um array de `Diagnostic` que é **mostrado ao utilizador**, não enterrado num
+log. Na primeira ligação à conta real, a app diz o que mapeou e o que assumiu.
 
 ## UX
 
@@ -119,9 +173,24 @@ ocultar valores** (para olhar para o telemóvel em público).
 
 ## Estado atual
 
-- [x] Motor de cenários + testes (`src/engine/`)
-- [x] Script de sondagem da API (`scripts/probe-bybit.mjs`)
-- [ ] Camada Bybit → posições normalizadas *(à espera da saída da sondagem)*
+- [x] Motor de cenários + testes (`src/engine/`) — 38 testes
+- [x] Cliente Bybit v5 read-only (`src/bybit/client.ts`)
+- [x] Normalizador com diagnósticos e cálculo de liquidação (`src/bybit/normalize.ts`)
+- [x] `DataSource`: fixtures + Bybit (`src/data/`)
+- [x] Relatório de terminal de ponta a ponta (`npm run report`)
+- [x] Script de sondagem autónomo (`scripts/probe-bybit.mjs`)
 - [ ] Supabase: auth, schema, cifra das chaves
 - [ ] Next.js: Estado, Cenários, Histórico
 - [ ] Deploy Vercel + IP whitelist na Bybit
+- [ ] Confirmar contra a conta real: `tradeMode`, presença de `liqPrice`,
+      e a convenção de sinal do campo `funding`
+
+### Pendente de verificação contra dados reais
+
+O código assume e **avisa quando assume**:
+
+| Pressuposto | Onde | Como se confirma |
+|---|---|---|
+| `funding` negativo = pago | `applyFunding` | Comparar com o extrato da Bybit |
+| Taxa de manutenção 0,5% quando ausente | `DEFAULT_MM_RATE` | Usar `positionMM` real |
+| Janela de 30 dias no registo de funding | `BybitSource` | Posições mais antigas ficam subestimadas |

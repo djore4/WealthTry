@@ -11,10 +11,25 @@ Ver [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) para as decisões e o porquê
 - Nunca comitar `.env`.
 - Restringir a chave por IP sempre que possível.
 
-## Passo 1 — sondar a API
+## Ver a ferramenta a funcionar, já
 
-Antes de construir interface, confirma-se a forma real dos dados. **Corre isto
-na tua máquina**, não num ambiente partilhado.
+Não é preciso ligar nenhuma conta. Há um portefólio sintético que replica a
+configuração real (2 perpétuos linear + 2 inverse, margem isolada):
+
+```bash
+npm run report              # dados sintéticos
+npm run report -- --bybit   # conta real (exige .env)
+```
+
+Mostra a tabela de posições com **alavancagem efetiva**, a fronteira de
+liquidação, a escada de cenários e o funding acumulado e projetado.
+
+## Sondar a API
+
+A app já se diagnostica a si mesma (ver `Diagnostic` em
+`src/data/source.ts`), por isso isto é opcional. Serve para inspecionar campos
+crus que o normalizador não usa. **Corre na tua máquina**, não num ambiente
+partilhado.
 
 ```bash
 cp .env.example .env     # preenche BYBIT_API_KEY e BYBIT_API_SECRET

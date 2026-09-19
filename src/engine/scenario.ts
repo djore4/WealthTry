@@ -147,18 +147,25 @@ export function evaluateScenario(
 
   // Capital de referencia: a margem avaliada ao preco ATUAL, nao ao do cenario.
   // E' o que tens hoje e que arriscas perder.
-  const baseCapital = positions.reduce((s, p) => s + marginUsd(p, p.markPrice), 0);
+  const baseCapitalUsd = positions.reduce((s, p) => s + marginUsd(p, p.markPrice), 0);
   const equity = legs.reduce((s, l) => s + l.equityUsd, 0);
 
   return {
     moves: Object.fromEntries(legs.map((l) => [l.position.symbol, l.move])),
     legs,
     totals: {
-      pnlUsd: legs.reduce((s, l) => s + (l.liquidated ? 0 : l.pnlUsd), 0),
+      // Definicao deliberada: `equity do cenario - capital de hoje`.
+      //
+      // A alternativa obvia — somar o pnlUsd de cada perna — produz numeros
+      // absurdos, porque uma posicao liquidada deixa de ter PnL e o total
+      // "melhora" quando o mercado piora. Assim a perda e sempre monotona e
+      // inclui automaticamente a desvalorizacao do colateral das inverse.
+      pnlUsd: equity - baseCapitalUsd,
+      baseCapitalUsd,
       marginUsd: legs.reduce((s, l) => s + l.marginUsd, 0),
       equityUsd: equity,
       liquidatedCount: legs.filter((l) => l.liquidated).length,
-      capitalLossPct: baseCapital > 0 ? 1 - equity / baseCapital : 0,
+      capitalLossPct: baseCapitalUsd > 0 ? 1 - equity / baseCapitalUsd : 0,
     },
   };
 }

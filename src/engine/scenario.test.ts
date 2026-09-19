@@ -177,3 +177,53 @@ describe('funding', () => {
     close(projectedFundingUsd(p, 30, 100), 9);
   });
 });
+
+/**
+ * Regressao. A versao anterior somava o pnlUsd de cada perna e ignorava as
+ * liquidadas, o que fazia a perda total MELHORAR quando o mercado piorava:
+ * a -30% dava -5700 USD e a -40% dava -2400 USD. Absurdo, e do tipo que so
+ * aparece quando se executa o codigo.
+ */
+describe('monotonia da perda', () => {
+  const carteira: Position[] = [
+    position({ symbol: 'A', liqPrice: 80 }), // liquida a -20%
+    position({ symbol: 'B', liqPrice: 65 }), // liquida a -35%
+    position({
+      symbol: 'C',
+      category: 'inverse',
+      size: 1000,
+      marginAsset: 'BTC',
+      initialMargin: 10,
+      liqPrice: 50,
+    }),
+  ];
+
+  it('quanto mais cai o mercado, mais se perde — sem excecoes nas liquidacoes', () => {
+    let anterior = Infinity;
+    let anteriorEquity = Infinity;
+
+    for (let move = 0.2; move >= -0.6; move -= 0.01) {
+      const { totals } = evaluateScenario(carteira, move);
+      assert.ok(
+        totals.pnlUsd <= anterior + 1e-9,
+        `PnL subiu ao descer para ${(move * 100).toFixed(0)}%: ${totals.pnlUsd} > ${anterior}`,
+      );
+      assert.ok(totals.equityUsd <= anteriorEquity + 1e-9, `equity subiu a ${move}`);
+      anterior = totals.pnlUsd;
+      anteriorEquity = totals.equityUsd;
+    }
+  });
+
+  it('a 0% o PnL do cenario iguala o PnL nao realizado', () => {
+    const { totals } = evaluateScenario(carteira, 0);
+    const naoRealizado = carteira.reduce((s, p) => s + pnlUsd(p, p.markPrice), 0);
+    close(totals.pnlUsd, naoRealizado);
+  });
+
+  it('perder tudo e -100% do capital, nunca mais do que isso', () => {
+    const { totals } = evaluateScenario(carteira, -0.9);
+    assert.equal(totals.liquidatedCount, 3);
+    close(totals.capitalLossPct, 1);
+    close(totals.pnlUsd, -totals.baseCapitalUsd);
+  });
+});

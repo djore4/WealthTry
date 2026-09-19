@@ -7,8 +7,9 @@
     "node": ">=22.6"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test src/engine/*.test.ts",
+    "test": "node --experimental-strip-types --test src/*/*.test.ts",
     "probe": "node scripts/probe-bybit.mjs",
-    "probe:safe": "node scripts/probe-bybit.mjs --redact --out probe-output.json"
+    "probe:safe": "node scripts/probe-bybit.mjs --redact --out probe-output.json",
+    "report": "node --experimental-strip-types scripts/report.ts"
   }
 }

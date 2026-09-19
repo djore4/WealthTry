@@ -68,7 +68,13 @@ export interface ScenarioResult {
   moves: Record<string, number>;
   legs: PositionOutcome[];
   totals: {
+    /**
+     * Ganho/perda em USD face ao capital de hoje: `equityUsd - baseCapitalUsd`.
+     * NAO e a soma do PnL das pernas — ver a nota em `evaluateScenario`.
+     */
     pnlUsd: number;
+    /** Margem de todas as posicoes valorizada ao preco de HOJE. A referencia. */
+    baseCapitalUsd: number;
     marginUsd: number;
     equityUsd: number;
     liquidatedCount: number;
